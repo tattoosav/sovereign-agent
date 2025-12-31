@@ -145,6 +145,8 @@ class AgentV2:
         self._turn_tool_calls: list[dict[str, Any]] = []
         self._error_history: list[str] = []
         self._recent_tool_calls: list[str] = []  # For loop detection
+        self._empty_search_count: int = 0  # Track unproductive searches
+        self._files_discovered: set[str] = set()  # Track what we've found
 
     def _select_model(self, task: str) -> str:
         """
@@ -414,6 +416,8 @@ class AgentV2:
         """
         self._turn_tool_calls = []
         self._recent_tool_calls = []  # Reset loop detection
+        self._empty_search_count = 0  # Reset unproductive search counter
+        self._files_discovered = set()  # Reset discovered files
         total_tokens = 0
 
         # Detect task type
@@ -521,6 +525,30 @@ class AgentV2:
                             iterations=iteration,
                         )
 
+            # Check for unproductive exploration (many empty searches)
+            if self._empty_search_count >= 4:
+                logger.warning(f"Unproductive exploration: {self._empty_search_count} empty searches")
+                self.console.print(f"[yellow]Many searches found nothing - synthesizing from available data[/yellow]")
+
+                # Inject guidance to synthesize
+                synthesis_prompt = f"""
+You've searched extensively but many patterns weren't found.
+Files discovered so far: {', '.join(list(self._files_discovered)[:20]) if self._files_discovered else 'See directory listings above'}
+
+STOP SEARCHING. Instead:
+1. Summarize what you DID find from the directory listings and any files you read
+2. Describe the project based on available evidence
+3. If you couldn't find specific patterns, say so and explain what the project likely is based on the file structure
+"""
+                accumulated_response += f"\n\n{synthesis_prompt}"
+                self._empty_search_count = 0  # Reset to give it one more chance
+
+            # Force synthesis after too many iterations
+            if iteration >= 10 and self._current_task_type == TaskType.EXPLORE:
+                logger.info(f"Forcing synthesis at iteration {iteration}")
+                self.console.print(f"[yellow]Iteration {iteration} - time to synthesize findings[/yellow]")
+                accumulated_response += "\n\n**Time to synthesize:** You've explored enough. Provide your analysis now based on what you found."
+
             if not tool_calls:
                 # No tools, task complete
                 self.metrics.iteration_metrics.record_iteration(
@@ -566,6 +594,20 @@ class AgentV2:
             for call, result in executed_tools:
                 if result.success:
                     self.console.print(f"[green]OK {call.name} succeeded[/green]")
+
+                    # Track productive vs unproductive results
+                    if call.name == "code_search":
+                        if "No matches found" in result.output or not result.output.strip():
+                            self._empty_search_count += 1
+                            logger.info(f"Empty search #{self._empty_search_count}")
+                    elif call.name == "list_directory":
+                        # Extract files from directory listing for context
+                        for line in result.output.split('\n'):
+                            if line.strip():
+                                self._files_discovered.add(line.strip())
+                    elif call.name == "read_file":
+                        # Successful file read - good progress
+                        self._empty_search_count = max(0, self._empty_search_count - 1)
                 else:
                     self.console.print(f"[red]FAIL {call.name} failed: {result.error}[/red]")
                     self._error_history.append(f"{call.name} failed: {result.error}")
