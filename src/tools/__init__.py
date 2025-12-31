@@ -7,6 +7,7 @@ from .git import GitTool
 from .review import CodeReviewTool
 from .search import CodeSearchTool
 from .shell import ShellTool
+from .python_exec import PythonExecTool
 from .test_gen import TestGenTool
 from .compound import (
     SearchAndReadTool,
@@ -34,6 +35,7 @@ __all__ = [
     "WriteFileTool",
     "ListDirectoryTool",
     "ShellTool",
+    "PythonExecTool",
     "StrReplaceTool",
     "CodeSearchTool",
     "GitTool",

@@ -15,6 +15,7 @@ from src.tools import (
     CodeSearchTool,
     GitTool,
     ListDirectoryTool,
+    PythonExecTool,
     ReadFileTool,
     ShellTool,
     StrReplaceTool,
@@ -62,8 +63,13 @@ class SessionManager:
         registry.register(CodeSearchTool(allowed_paths=allowed_paths))
         registry.register(GitTool(allowed_paths=allowed_paths))
         registry.register(ShellTool(
-            timeout=30,
-            blocked_commands=["rm -rf /", "rm -rf ~", "mkfs", "dd if="],
+            timeout=300,  # 5 minutes for complex operations on GPU
+            blocked_commands=["rm -rf /", "rm -rf ~", "mkfs", "dd if=", ":(){:|:&};:"],
+            # No allowed_commands restriction - agent has full autonomy
+        ))
+        registry.register(PythonExecTool(
+            timeout=300,  # 5 minutes for GPU operations
+            working_dir=working_dir,
         ))
 
         return registry
