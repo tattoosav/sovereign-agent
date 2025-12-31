@@ -210,12 +210,13 @@ def test_memory_system():
 
         store = VectorStore(persist_directory="/tmp/test_chromadb")
         store.add_documents(
+            collection_name="test_collection",
             documents=["Test document for vector search"],
             ids=["test-1"],
             metadatas=[{"source": "test"}]
         )
-        results_search = store.search("test document", n_results=1)
-        print_result("Vector store", len(results_search) > 0)
+        results_search = store.search("test_collection", "test document", n_results=1)
+        print_result("Vector store", len(results_search.get("documents", [])) > 0)
         results.append(True)
 
     except Exception as e:
@@ -245,15 +246,33 @@ def test_llm_connection():
     try:
         import httpx
 
+        # First, get available models
+        tags_response = httpx.get("http://localhost:11434/api/tags", timeout=10)
+        tags_response.raise_for_status()
+        models = [m["name"] for m in tags_response.json().get("models", [])]
+
+        # Find a qwen model
+        model = None
+        for m in models:
+            if "qwen" in m.lower():
+                model = m
+                break
+
+        if not model:
+            print_result("LLM generation", False, f"No qwen model found. Available: {models}")
+            return False
+
+        print(f"       Using model: {model}")
+
         response = httpx.post(
             "http://localhost:11434/api/generate",
             json={
-                "model": "qwen2.5-coder:7b",
+                "model": model,
                 "prompt": "Say 'Hello, I am working!' in exactly those words.",
                 "stream": False,
                 "options": {"num_predict": 20}
             },
-            timeout=60.0
+            timeout=120.0
         )
         response.raise_for_status()
         data = response.json()
