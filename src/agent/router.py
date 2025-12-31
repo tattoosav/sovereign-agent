@@ -137,9 +137,16 @@ class ModelRouter:
                     logger.info(f"Falling back from {preferred_size.value} to {size.value} (model availability)")
                 return model_name
 
-        # If no configured models available, return the medium as default
-        # (let it fail later with a clear error)
-        logger.warning("No configured models available, using default")
+        # If no configured models available, use ANY available model
+        available = cls.get_available_models()
+        if available:
+            # Prefer larger models for better quality
+            for model in sorted(available, key=lambda x: '33b' in x or '70b' in x, reverse=True):
+                logger.info(f"Using available model: {model} (configured models not found)")
+                return model
+
+        # Last resort - return default and let it fail with clear error
+        logger.warning("No models available at all!")
         return cls.MODELS[ModelSize.MEDIUM].name
 
     @staticmethod
