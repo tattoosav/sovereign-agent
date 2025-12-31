@@ -295,6 +295,63 @@ class AgentV2:
         logger.warning("Could not infer path from context")
         return None
 
+    def _detect_placeholder_code(self, content: str) -> tuple[bool, list[str]]:
+        """
+        Detect placeholder/stub code patterns that indicate incomplete implementations.
+
+        Returns:
+            (has_placeholders, list of detected patterns)
+        """
+        placeholder_patterns = [
+            # Comment-based placeholders
+            (r'//\s*TODO', 'TODO comment'),
+            (r'//\s*FIXME', 'FIXME comment'),
+            (r'//\s*implement\s+here', 'implement here comment'),
+            (r'//\s*add\s+(your\s+)?code\s+here', 'add code here comment'),
+            (r'//\s*this\s+(should|could|would)\s+(be|include)', 'placeholder description'),
+            (r'//\s*\.\.\.|//\s*etc', 'ellipsis comment'),
+            (r'//\s*placeholder', 'placeholder comment'),
+            (r'//\s*stub', 'stub comment'),
+            (r'//\s*not\s+implemented', 'not implemented comment'),
+            (r'//\s*example:', 'example comment'),
+            (r'//\s*hypothetical', 'hypothetical comment'),
+            (r'/\*\s*TODO', 'TODO block comment'),
+            (r'#\s*TODO', 'Python TODO'),
+            (r'#\s*implement', 'Python implement comment'),
+
+            # Empty function bodies (C++/C#)
+            (r'\{\s*return;\s*\}', 'empty return statement'),
+            (r'\{\s*\}', 'empty function body'),
+            (r'\{\s*//.*\n\s*\}', 'function with only comment'),
+
+            # Placeholder variable names
+            (r'your_\w+_here', 'placeholder variable'),
+            (r'replace_this', 'replace_this variable'),
+            (r'PLACEHOLDER', 'PLACEHOLDER constant'),
+
+            # Stub throw statements
+            (r'throw\s+.*not\s*implemented', 'not implemented exception'),
+            (r'NotImplementedException', 'NotImplementedException'),
+        ]
+
+        detected = []
+        content_lower = content.lower()
+
+        for pattern, name in placeholder_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                detected.append(name)
+
+        # Check for suspiciously short function implementations
+        # Functions with just 1-2 lines inside are likely stubs
+        func_pattern = r'(void|int|bool|float|string|auto)\s+\w+\s*\([^)]*\)\s*\{([^}]{1,50})\}'
+        short_funcs = re.findall(func_pattern, content)
+        for _, body in short_funcs:
+            if body.strip() in ['', 'return;', 'return 0;', 'return false;', 'return nullptr;']:
+                detected.append('stub function body')
+                break
+
+        return len(detected) > 0, detected
+
     def _validate_tool_call(self, call: ParsedToolCall) -> tuple[bool, str]:
         """
         Validate a tool call before execution.
@@ -323,6 +380,31 @@ class AgentV2:
                 guidance = "\n\nFor write_file, you MUST provide:\n- path: file to create/overwrite\n- content: complete file contents"
 
             return False, f"Missing required parameters: {param_list}{guidance}"
+
+        # PLACEHOLDER DETECTION for write_file and str_replace
+        if call.name == "write_file" and "content" in call.params:
+            has_placeholders, detected = self._detect_placeholder_code(call.params["content"])
+            if has_placeholders:
+                self.console.print(f"[red bold]PLACEHOLDER CODE DETECTED![/red bold]")
+                self.console.print(f"[red]Detected patterns: {', '.join(detected)}[/red]")
+                return False, (
+                    f"REJECTED: Placeholder/stub code detected! Found: {', '.join(detected)}\n\n"
+                    "You MUST write COMPLETE, WORKING implementations.\n"
+                    "- NO empty function bodies\n"
+                    "- NO TODO comments\n"
+                    "- NO 'implement here' comments\n"
+                    "- EVERY function must have real, working code inside\n\n"
+                    "Rewrite with COMPLETE implementation code."
+                )
+
+        if call.name == "str_replace" and "new_str" in call.params:
+            has_placeholders, detected = self._detect_placeholder_code(call.params["new_str"])
+            if has_placeholders:
+                self.console.print(f"[red bold]PLACEHOLDER CODE DETECTED IN REPLACEMENT![/red bold]")
+                return False, (
+                    f"REJECTED: Placeholder code in replacement! Found: {', '.join(detected)}\n"
+                    "Write COMPLETE implementation code, not stubs or TODOs."
+                )
 
         return True, ""
 
