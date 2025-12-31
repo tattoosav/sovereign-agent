@@ -29,7 +29,7 @@ from .error_recovery import ErrorContext, ErrorRecoveryManager
 from .llm import OllamaClient
 from .metrics import AgentMetricsCollector
 from .operation_cache import OperationCache
-from .planner import TaskPlanner, TaskStatus
+from .planner import TaskPlanner, TaskStatus, TaskComplexity, TaskPlan
 from .prompts_v2 import (
     PromptContext,
     TaskType,
@@ -63,16 +63,18 @@ class AgentConfig:
     """Configuration for the agent."""
     model: str = "qwen2.5-coder:14b"  # Default, but router may override
     ollama_url: str = "http://localhost:11434"
-    max_iterations: int = 25  # Increased for complex multi-file tasks
+    max_iterations: int = 50  # Increased for complex multi-file project tasks
     temperature: float = 0.1
-    max_retries: int = 3
-    retry_delay: float = 1.0
+    max_retries: int = 5     # More retries for reliability
+    retry_delay: float = 2.0
+    timeout: float = 600.0   # 10 minutes for complex tasks
+    context_window: int = 32768  # Large context for complex projects
     # v2 features
     enable_routing: bool = True      # Dynamic model selection
     enable_rag: bool = True          # Context retrieval
     enable_planning: bool = True     # Task decomposition
     enable_learning: bool = True     # Store successful solutions
-    max_history_messages: int = 20   # Before summarization kicks in (increased for better context)
+    max_history_messages: int = 30   # Before summarization kicks in (increased for better context)
     enable_parallel: bool = True     # Parallel tool execution
     parallel_workers: int = 4        # Max concurrent tool executions
 
@@ -118,6 +120,8 @@ class AgentV2:
             base_url=self.config.ollama_url,
             max_retries=self.config.max_retries,
             retry_delay=self.config.retry_delay,
+            timeout=self.config.timeout,
+            context_window=self.config.context_window,
         )
 
         # Conversation state
@@ -147,6 +151,8 @@ class AgentV2:
         self._recent_tool_calls: list[str] = []  # For loop detection
         self._empty_search_count: int = 0  # Track unproductive searches
         self._files_discovered: set[str] = set()  # Track what we've found
+        self._current_plan: TaskPlan | None = None  # For complex project tracking
+        self._task_complexity: TaskComplexity = TaskComplexity.SIMPLE
 
     def _select_model(self, task: str) -> str:
         """
@@ -172,6 +178,8 @@ class AgentV2:
                 base_url=self.config.ollama_url,
                 max_retries=self.config.max_retries,
                 retry_delay=self.config.retry_delay,
+                timeout=self.config.timeout,
+                context_window=self.config.context_window,
             )
 
         return model
@@ -446,11 +454,12 @@ class AgentV2:
         Run a single turn of the enhanced agent.
 
         This orchestrates:
-        1. Model selection
-        2. Context retrieval
-        3. Dynamic prompting
-        4. Tool execution loop
-        5. Learning from success
+        1. Complexity analysis and project planning
+        2. Model selection
+        3. Context retrieval
+        4. Dynamic prompting
+        5. Tool execution loop
+        6. Learning from success
 
         Returns:
             TurnResult with response and metadata
@@ -460,6 +469,20 @@ class AgentV2:
         self._empty_search_count = 0  # Reset unproductive search counter
         self._files_discovered = set()  # Reset discovered files
         total_tokens = 0
+
+        # Analyze task complexity
+        self._task_complexity = TaskPlanner.analyze_complexity(user_input)
+        self.console.print(f"[dim]Complexity: {self._task_complexity.value}[/dim]")
+
+        # Create project plan for complex tasks
+        if self._task_complexity == TaskComplexity.PROJECT:
+            self._current_plan = TaskPlanner.create_project_plan(user_input)
+            self.console.print(f"[cyan]Created project plan with {len(self._current_plan.tasks)} phases[/cyan]")
+            plan_summary = TaskPlanner.format_plan_summary(self._current_plan)
+            self.console.print(f"[dim]{plan_summary}[/dim]")
+        elif self._task_complexity == TaskComplexity.COMPLEX:
+            self._current_plan = TaskPlanner.decompose_task(user_input)
+            self.console.print(f"[cyan]Decomposed into {len(self._current_plan.tasks)} subtasks[/cyan]")
 
         # Detect task type
         self._current_task_type = detect_task_type(user_input)
@@ -479,6 +502,11 @@ class AgentV2:
 
         # Build dynamic prompt
         system_prompt = self._build_prompt(user_input, retrieved_context)
+
+        # Add project plan context for complex tasks
+        if self._current_plan:
+            phase_prompt = TaskPlanner.get_current_phase_prompt(self._current_plan)
+            system_prompt += f"\n\n{phase_prompt}"
 
         iteration = 0
         accumulated_response = ""
