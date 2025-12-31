@@ -217,23 +217,35 @@ class AgentV2:
         if self.metrics.iteration_metrics.max_iterations_reached > 2:
             performance_hint = "Warning: You've hit max iterations multiple times. Be more decisive."
 
+        # Truncate retrieved context if too large (prevents context overflow)
+        rag_section = retrieved_context.to_prompt_section()
+        if len(rag_section) > 3000:
+            rag_section = rag_section[:3000] + "\n[...RAG context truncated...]"
+
         context = PromptContext(
             task=task,
             task_type=self._current_task_type,
             model_size=self._get_model_size(),
             tools_block=self.tools.get_prompt_block(),
-            retrieved_context=retrieved_context.to_prompt_section(),
-            conversation_summary=conversation_summary,
+            retrieved_context=rag_section,
+            conversation_summary=conversation_summary[:1500] if conversation_summary else "",
             error_history=error_history,
             performance_hint=performance_hint,
         )
 
         # Calculate approximate context size
         history_size = sum(len(m.content) for m in self.history)
-        # Use compact mode if context is getting large (>20K chars ~ 5K tokens)
-        use_compact = history_size > 20000
+        # Use compact mode if context is getting large (>15K chars ~ 4K tokens)
+        use_compact = history_size > 15000
 
-        return build_dynamic_prompt(context, compact=use_compact)
+        prompt = build_dynamic_prompt(context, compact=use_compact)
+
+        # Final safety: truncate system prompt if still too large (max ~40K chars)
+        if len(prompt) > 40000:
+            self.console.print(f"[yellow]Warning: System prompt truncated from {len(prompt)} to 40000 chars[/yellow]")
+            prompt = prompt[:40000] + "\n\n[System prompt truncated due to size]"
+
+        return prompt
 
     def _parse_tool_calls(self, text: str) -> list[ParsedToolCall]:
         """Parse tool calls from LLM output."""

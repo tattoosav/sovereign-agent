@@ -466,8 +466,12 @@ def create_app() -> FastAPI:
         session = session_manager.get_or_create_session(request.session_id)
 
         try:
+            logger.info(f"Processing chat request for session {request.session_id[:8]}...")
+
             # Run the v2 agent (returns TurnResult with metadata)
             result = session.agent.run_turn(request.message)
+
+            logger.info(f"Agent completed with {len(result.tool_calls)} tool calls")
 
             # Clean response for display (remove tool XML)
             display_response = re.sub(
