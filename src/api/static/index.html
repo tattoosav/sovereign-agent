@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Sovereign Agent</h1>
+            <p class="subtitle">Your Local Coding Assistant</p>
+            <div class="status-bar">
+                <span id="connection-status" class="status disconnected">Checking...</span>
+                <span id="session-info"></span>
+            </div>
+        </header>
+
+        <main>
+            <div id="chat-container">
+                <div id="messages"></div>
+            </div>
+
+            <div class="input-container">
+                <textarea
+                    id="user-input"
+                    placeholder="Ask me anything about your code..."
+                    rows="3"
+                ></textarea>
+                <div class="input-actions">
+                    <button id="send-btn" class="btn primary">Send</button>
+                    <button id="clear-btn" class="btn secondary">Clear</button>
+                </div>
+            </div>
+        </main>
+
+        <aside id="sidebar">
+            <div class="sidebar-section">
+                <h3>Tools</h3>
+                <div id="tools-list"></div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Session</h3>
+                <button id="new-session-btn" class="btn small">New Session</button>
+                <button id="metrics-btn" class="btn small">Show Metrics</button>
+            </div>
+        </aside>
+    </div>
+
+    <div id="modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modal-title"></h2>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

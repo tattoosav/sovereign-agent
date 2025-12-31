@@ -1,0 +1,46 @@
+# Sovereign Agent Configuration Example
+# Copy this to config.yaml and customize as needed
+# All settings have sensible defaults and are optional
+
+# LLM Configuration
+llm:
+  # Model to use (must be available in Ollama)
+  model: "qwen2.5-coder:14b"
+
+  # Ollama server URL
+  ollama_url: "http://localhost:11434"
+
+  # Request timeout in seconds
+  timeout: 300.0
+
+  # Sampling temperature (0.0 = deterministic, 1.0 = creative)
+  temperature: 0.1
+
+  # Maximum tokens to generate per request
+  max_tokens: 4096
+
+  # Retry configuration
+  max_retries: 3
+  retry_delay: 1.0  # Initial delay in seconds (uses exponential backoff)
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Optional log file path (leave empty for no file logging)
+  log_file: null  # Example: "logs/sovereign-agent.log"
+
+  # Whether to log to console
+  console: true
+
+  # Use JSON format for structured logging
+  json_format: false
+
+# Agent Configuration
+agent:
+  # Maximum iterations per task (prevents infinite loops)
+  max_iterations: 10
+
+  # Working directory (leave empty to use current directory)
+  working_dir: null  # Example: "/path/to/project"
