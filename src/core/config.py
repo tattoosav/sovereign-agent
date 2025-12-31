@@ -40,7 +40,7 @@ class LoggingConfig:
 @dataclass
 class AgentConfig:
     """Agent configuration."""
-    max_iterations: int = 50  # High for production code generation
+    max_iterations: int = 15  # Reasonable limit to prevent timeouts
     working_dir: Optional[str] = None
 
 

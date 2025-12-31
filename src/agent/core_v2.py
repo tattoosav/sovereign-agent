@@ -937,24 +937,44 @@ STOP SEARCHING. Instead:
             is_impl_task = self._current_task_type in [TaskType.IMPLEMENT, TaskType.REFACTOR, TaskType.ULTRATHINK]
             files_written_count = len(self._files_written)
 
-            if is_impl_task and files_written_count >= 3:
-                # Check if we should complete - written enough files
+            if is_impl_task and files_written_count >= 1:
                 self.console.print(f"[cyan]Implementation progress: {files_written_count} files written[/cyan]")
 
-                # After 5+ files or 8+ iterations with files written, suggest completion
-                if files_written_count >= 5 or (iteration >= 8 and files_written_count >= 3):
-                    completion_prompt = f"""
+            # FORCE COMPLETION after enough work to prevent timeout
+            if files_written_count >= 8 or (iteration >= 10 and files_written_count >= 3):
+                self.console.print(f"[green bold]Task complete! {files_written_count} files written.[/green bold]")
+                completion_summary = f"""
+IMPLEMENTATION COMPLETE!
+
+Files created/modified ({files_written_count}):
+{chr(10).join('- ' + f for f in list(self._files_written))}
+
+Task finished successfully.
+"""
+                accumulated_response += completion_summary
+                self.history.append(Message(role="assistant", content=accumulated_response))
+                return TurnResult(
+                    response=accumulated_response,
+                    tool_calls=self._turn_tool_calls,
+                    model_used=model_used,
+                    task_type=self._current_task_type,
+                    tokens_used=total_tokens,
+                    iterations=iteration,
+                )
+
+            # After 5+ files, suggest completion (but don't force)
+            if files_written_count >= 5:
+                completion_prompt = f"""
 TASK COMPLETION CHECK:
 You have written {files_written_count} files: {', '.join(list(self._files_written)[-5:])}
 
 If the implementation is COMPLETE:
 - Provide a summary of what was implemented
-- List the files created/modified
 - Do NOT use any more tools
 
-If more files are needed, continue writing them.
+If more files are needed, continue.
 """
-                    tool_results_text += f"\n\n{completion_prompt}"
+                tool_results_text += f"\n\n{completion_prompt}"
 
             # Add to history
             self.history.append(Message(role="assistant", content=llm_output))
