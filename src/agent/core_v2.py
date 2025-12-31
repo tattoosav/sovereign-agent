@@ -63,7 +63,7 @@ class AgentConfig:
     """Configuration for the agent."""
     model: str = "qwen2.5-coder:14b"  # Default, but router may override
     ollama_url: str = "http://localhost:11434"
-    max_iterations: int = 10
+    max_iterations: int = 25  # Increased for complex multi-file tasks
     temperature: float = 0.1
     max_retries: int = 3
     retry_delay: float = 1.0
@@ -246,17 +246,25 @@ class AgentV2:
     def _infer_path_from_context(self) -> str | None:
         """Try to infer a project path from recent conversation context."""
         # Look for paths mentioned in recent messages
-        for msg in reversed(self.history[-5:]):
+        for msg in reversed(self.history[-10:]):  # Check more messages
             content = msg.content
-            # Look for /tmp/sovereign_ paths (uploaded projects)
-            import re
-            match = re.search(r'/tmp/sovereign_[a-z0-9_]+', content)
+            # Look for /tmp/sovereign_ paths (uploaded projects) - tempfile adds random suffix
+            # Format: /tmp/sovereign_abc12345_xyz789 or similar
+            match = re.search(r'/tmp/sovereign_[a-zA-Z0-9_]+', content)
             if match:
+                logger.info(f"Found sovereign path in context: {match.group(0)}")
                 return match.group(0)
-            # Look for other common project paths
-            match = re.search(r'(?:files are at|project at|uploaded to)[:\s]+([/\w_-]+)', content, re.IGNORECASE)
+            # Look for any /tmp path that might be a project directory
+            match = re.search(r'/tmp/[a-zA-Z0-9_-]+', content)
             if match:
+                logger.info(f"Found tmp path in context: {match.group(0)}")
+                return match.group(0)
+            # Look for explicit path mentions
+            match = re.search(r'(?:files are at|project at|uploaded to|path is)[:\s]+([/\w_-]+)', content, re.IGNORECASE)
+            if match:
+                logger.info(f"Found explicit path mention: {match.group(1)}")
                 return match.group(1)
+        logger.warning("Could not infer path from context")
         return None
 
     def _execute_tool(self, call: ParsedToolCall) -> ToolResult:
