@@ -176,6 +176,19 @@ class SovereignAgent {
                 })
             });
 
+            // Check for non-OK response or HTML error page
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Server error ${response.status}: ${text.substring(0, 100)}`);
+            }
+
+            // Check content type - if HTML, it's an error page
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('text/html')) {
+                const text = await response.text();
+                throw new Error(`Got HTML instead of stream - proxy error or timeout`);
+            }
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
 
@@ -249,6 +262,13 @@ class SovereignAgent {
                     session_id: this.sessionId
                 })
             });
+
+            // Check content type before parsing
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const text = await response.text();
+                throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`);
+            }
 
             const data = await response.json();
             const contentEl = messageEl.querySelector('.message-content');

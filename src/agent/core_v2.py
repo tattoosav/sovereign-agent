@@ -380,30 +380,13 @@ class AgentV2:
 
             return False, f"Missing required parameters: {param_list}{guidance}"
 
-        # PLACEHOLDER DETECTION for write_file and str_replace
-        if call.name == "write_file" and "content" in call.params:
-            has_placeholders, detected = self._detect_placeholder_code(call.params["content"])
-            if has_placeholders:
-                self.console.print(f"[red bold]PLACEHOLDER CODE DETECTED![/red bold]")
-                self.console.print(f"[red]Detected patterns: {', '.join(detected)}[/red]")
-                return False, (
-                    f"REJECTED: Placeholder/stub code detected! Found: {', '.join(detected)}\n\n"
-                    "You MUST write COMPLETE, WORKING implementations.\n"
-                    "- NO empty function bodies\n"
-                    "- NO TODO comments\n"
-                    "- NO 'implement here' comments\n"
-                    "- EVERY function must have real, working code inside\n\n"
-                    "Rewrite with COMPLETE implementation code."
-                )
-
-        if call.name == "str_replace" and "new_str" in call.params:
-            has_placeholders, detected = self._detect_placeholder_code(call.params["new_str"])
-            if has_placeholders:
-                self.console.print(f"[red bold]PLACEHOLDER CODE DETECTED IN REPLACEMENT![/red bold]")
-                return False, (
-                    f"REJECTED: Placeholder code in replacement! Found: {', '.join(detected)}\n"
-                    "Write COMPLETE implementation code, not stubs or TODOs."
-                )
+        # PLACEHOLDER DETECTION - DISABLED for now as it causes loops with Qwen models
+        # The model will be guided by prompts instead of hard rejection
+        # if call.name == "write_file" and "content" in call.params:
+        #     has_placeholders, detected = self._detect_placeholder_code(call.params["content"])
+        #     if has_placeholders:
+        #         self.console.print(f"[yellow]Note: Code may contain placeholder patterns[/yellow]")
+        pass
 
         return True, ""
 
