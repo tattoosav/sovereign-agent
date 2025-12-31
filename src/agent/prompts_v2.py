@@ -518,87 +518,90 @@ def detect_task_type(task: str) -> TaskType:
     return TaskType.GENERAL
 
 
-def build_dynamic_prompt(context: PromptContext) -> str:
+def build_dynamic_prompt(context: PromptContext, compact: bool = False) -> str:
     """
     Build a dynamic system prompt based on context.
 
     Args:
         context: PromptContext with all relevant information
+        compact: If True, use minimal prompts to save tokens
 
     Returns:
         Complete system prompt string
     """
     sections = []
 
-    # Base identity
+    # Base identity (always include)
     sections.append(BASE_IDENTITY)
 
-    # Model hint
-    sections.append(MODEL_HINTS[context.model_size])
+    # For compact mode, skip optional sections
+    if not compact:
+        # Model hint
+        sections.append(MODEL_HINTS[context.model_size])
 
-    # Language/Framework specialization
-    if context.specialization != Specialization.GENERAL:
-        spec_config = get_specialization(context.specialization)
-        sections.append(spec_config.system_prompt_additions)
-    elif context.file_extensions:
-        # Auto-detect specialization from file extensions
-        detected = detect_specialization(context.file_extensions)
-        if detected != Specialization.GENERAL:
-            spec_config = get_specialization(detected)
+        # Language/Framework specialization
+        if context.specialization != Specialization.GENERAL:
+            spec_config = get_specialization(context.specialization)
             sections.append(spec_config.system_prompt_additions)
+        elif context.file_extensions:
+            # Auto-detect specialization from file extensions
+            detected = detect_specialization(context.file_extensions)
+            if detected != Specialization.GENERAL:
+                spec_config = get_specialization(detected)
+                sections.append(spec_config.system_prompt_additions)
 
-    # Retrieved context (RAG)
+    # Retrieved context (RAG) - truncate if too long
     if context.retrieved_context:
-        sections.append("## Relevant Context from Memory\n")
-        sections.append(context.retrieved_context)
-        sections.append("\nUse this context to inform your approach.\n")
+        rag_content = context.retrieved_context
+        if len(rag_content) > 4000:
+            rag_content = rag_content[:4000] + "\n[...truncated...]"
+        sections.append("## Relevant Context\n")
+        sections.append(rag_content)
 
-    # Conversation summary
+    # Conversation summary - truncate if too long
     if context.conversation_summary:
-        sections.append("## Previous Conversation Summary\n")
-        sections.append(context.conversation_summary)
-        sections.append("\n")
+        summary = context.conversation_summary
+        if len(summary) > 2000:
+            summary = summary[:2000] + "\n[...truncated...]"
+        sections.append("## Previous Summary\n")
+        sections.append(summary)
 
-    # Task-specific guidance
+    # Task-specific guidance (always include)
     sections.append(TASK_PROMPTS[context.task_type])
 
-    # Tools
+    # Tools (always include)
     sections.append("## Available Tools\n")
     sections.append(context.tools_block)
 
-    # Tool format
+    # Tool format (always include - critical for correct tool calls)
     sections.append(TOOL_FORMAT)
 
-    # Autonomous action (critical for independent operation)
-    sections.append(AUTONOMOUS_ACTION)
+    # For compact mode, use condensed rules
+    if compact:
+        sections.append("""
+## Quick Rules
+1. WRITE CODE with write_file - don't just explain
+2. Read files before editing
+3. Complete implementations, no placeholders
+4. Don't repeat failed operations
+""")
+    else:
+        # Full rules for non-compact mode
+        sections.append(AUTONOMOUS_ACTION)
+        sections.append(EFFICIENCY_RULES)
+        sections.append(ANTI_LOOP_RULES)
 
-    # Critical thinking (always include for intelligent behavior)
-    sections.append(CRITICAL_THINKING)
-
-    # Efficiency rules
-    sections.append(EFFICIENCY_RULES)
-
-    # Anti-loop rules (critical for preventing repetitive behavior)
-    sections.append(ANTI_LOOP_RULES)
-
-    # Error learning
-    sections.append(ERROR_LEARNING)
-
-    # Response format
-    sections.append(RESPONSE_FORMAT)
-
-    # Error history (if there were recent errors)
+    # Error history (if there were recent errors) - always include but limit
     if context.error_history:
-        sections.append("## Recent Errors to Avoid\n")
-        sections.append(context.error_history)
-        sections.append("\nLearn from these errors and avoid repeating them.\n")
+        errors = context.error_history
+        if len(errors) > 500:
+            errors = errors[-500:]
+        sections.append("## Recent Errors\n")
+        sections.append(errors)
 
     # Performance hint
     if context.performance_hint:
-        sections.append(f"\n## Performance Note\n{context.performance_hint}\n")
-
-    # Closing
-    sections.append("\nWork smart, work fast, work correct.")
+        sections.append(f"\n{context.performance_hint}\n")
 
     return "\n".join(sections)
 

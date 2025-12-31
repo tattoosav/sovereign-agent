@@ -228,7 +228,12 @@ class AgentV2:
             performance_hint=performance_hint,
         )
 
-        return build_dynamic_prompt(context)
+        # Calculate approximate context size
+        history_size = sum(len(m.content) for m in self.history)
+        # Use compact mode if context is getting large (>20K chars ~ 5K tokens)
+        use_compact = history_size > 20000
+
+        return build_dynamic_prompt(context, compact=use_compact)
 
     def _parse_tool_calls(self, text: str) -> list[ParsedToolCall]:
         """Parse tool calls from LLM output."""
@@ -549,7 +554,37 @@ class AgentV2:
 
             except Exception as e:
                 self.metrics.llm_metrics.record_call(success=False, duration=0.0)
-                error_msg = f"LLM error: {e}"
+
+                # More detailed error analysis
+                error_str = str(e)
+                if "timeout" in error_str.lower():
+                    error_msg = f"LLM timeout - model may be overloaded. Try again or use a smaller context."
+                elif "context" in error_str.lower() or "length" in error_str.lower():
+                    # Context too long - try to recover with smaller context
+                    total_chars = sum(len(m["content"]) for m in messages)
+                    error_msg = f"Context too large ({total_chars} chars). Reducing context and retrying..."
+                    self.console.print(f"[yellow]{error_msg}[/yellow]")
+
+                    # Try with only the last few messages
+                    if len(messages) > 2:
+                        reduced_messages = [messages[0]]  # Keep system prompt
+                        reduced_messages.extend(messages[-4:])  # Keep last 4 messages
+                        try:
+                            response = self.llm.chat(
+                                messages=reduced_messages,
+                                temperature=self.config.temperature,
+                            )
+                            self.console.print(f"[green]Retry with reduced context succeeded[/green]")
+                            total_tokens += response.tokens_used
+                            # Continue with the rest of the loop
+                            llm_output = response.content
+                            accumulated_response += llm_output
+                            continue  # Skip the error return, continue processing
+                        except Exception as retry_e:
+                            error_msg = f"LLM failed even with reduced context: {retry_e}"
+                else:
+                    error_msg = f"LLM error: {e}"
+
                 self.console.print(f"[red]{error_msg}[/red]")
                 self._error_history.append(f"LLM failed: {e}")
                 return TurnResult(
