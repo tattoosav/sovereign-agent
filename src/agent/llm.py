@@ -101,7 +101,7 @@ class OllamaClient:
         prompt: str,
         system: str | None = None,
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,  # 16K tokens for full file generation
     ) -> LLMResponse:
         """
         Generate a completion.
@@ -125,6 +125,7 @@ class OllamaClient:
                 "options": {
                     "temperature": temperature,
                     "num_predict": max_tokens,
+                    "num_ctx": self.context_window,  # Use full context window
                 }
             }
 
