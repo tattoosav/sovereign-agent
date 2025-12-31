@@ -23,6 +23,8 @@ class TaskType(Enum):
     TEST = "test"                 # Write tests
     DOCUMENT = "document"         # Write documentation
     EXPLORE = "explore"           # Explore codebase
+    BUILD = "build"               # Build/compile projects
+    ULTRATHINK = "ultrathink"     # Deep reasoning mode
     GENERAL = "general"           # General task
 
 
@@ -487,6 +489,211 @@ Do NOT stop writing mid-file. Do NOT truncate. Write the ENTIRE implementation.
 - Choose the most appropriate tools
 - Verify your work produces correct results
 - Be efficient and focused
+""",
+
+    TaskType.BUILD: """\
+## BUILD SYSTEM MASTERY
+
+You are a **BUILD SYSTEM EXPERT** with complete knowledge of:
+
+### Visual Studio / MSBuild
+```
+MSBuild Command Line:
+"C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" ^
+    Project.vcxproj ^
+    /p:Configuration=Release ^
+    /p:Platform=x64 ^
+    /t:Rebuild ^
+    /v:detailed
+
+Common Properties:
+/p:PlatformToolset=v143          # VS 2022 toolset
+/p:WindowsTargetPlatformVersion=10.0
+/p:RuntimeLibrary=MultiThreaded  # /MT (static CRT)
+/p:RuntimeLibrary=MultiThreadedDLL  # /MD (dynamic CRT)
+```
+
+### vcxproj Structure
+```xml
+<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <ConfigurationType>Application</ConfigurationType>
+  <PlatformToolset>v143</PlatformToolset>
+  <CharacterSet>Unicode</CharacterSet>
+  <WholeProgramOptimization>true</WholeProgramOptimization>
+</PropertyGroup>
+
+<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <ClCompile>
+    <LanguageStandard>stdcpp20</LanguageStandard>
+    <PreprocessorDefinitions>NDEBUG;WIN32;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+    <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+  </ClCompile>
+  <Link>
+    <SubSystem>Windows</SubSystem>
+    <AdditionalDependencies>d3d11.lib;dxgi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+  </Link>
+</ItemDefinitionGroup>
+```
+
+### CMake
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(MyProject LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Windows specific
+if(WIN32)
+    add_definitions(-DUNICODE -D_UNICODE)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+# Add executable
+add_executable(${PROJECT_NAME} WIN32
+    src/main.cpp
+    src/overlay.cpp
+)
+
+# Link DirectX
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    d3d11
+    dxgi
+    dwmapi
+)
+```
+
+### Common Build Errors & Fixes
+
+**LNK2019 unresolved external symbol**
+- Missing library: Add to AdditionalDependencies
+- Missing source file: Add to ClCompile items
+- Mismatched calling convention: Check __stdcall vs __cdecl
+
+**C4828 illegal character**
+- File encoding issue: Save as UTF-8 with BOM or add /utf-8 flag
+
+**LNK4098 defaultlib conflicts**
+- Runtime library mismatch: Ensure all libs use same /MT or /MD
+
+**C2039 is not a member**
+- Missing include, wrong namespace, or SDK version mismatch
+
+**Toolset Issues**
+- v143 = VS 2022
+- v142 = VS 2019
+- v141 = VS 2017
+- Check VCToolsVersion in project properties
+
+### Build Process
+1. Read vcxproj/CMakeLists.txt to understand project structure
+2. Check Configuration and Platform settings
+3. Verify all source files are included
+4. Check library dependencies
+5. Run build with verbose output
+6. Analyze errors systematically
+7. Fix issues one by one
+8. Verify successful build
+
+### DirectX/Overlay Build Requirements
+```xml
+<AdditionalDependencies>
+  d3d11.lib;
+  dxgi.lib;
+  d3dcompiler.lib;
+  dwmapi.lib;
+  dxguid.lib;
+  %(AdditionalDependencies)
+</AdditionalDependencies>
+```
+""",
+
+    TaskType.ULTRATHINK: """\
+## ULTRATHINK MODE - DEEP REASONING ACTIVATED
+
+You are now in **ULTRATHINK** mode - maximum cognitive depth engaged.
+
+### THINKING FRAMEWORK
+
+**Phase 1: DECOMPOSE**
+Break down the problem into its fundamental components:
+- What are the core requirements?
+- What are the constraints?
+- What are the dependencies?
+- What could go wrong?
+
+**Phase 2: ANALYZE**
+Examine each component deeply:
+- What patterns exist?
+- What are the edge cases?
+- What assumptions am I making?
+- Are those assumptions valid?
+
+**Phase 3: SYNTHESIZE**
+Combine insights into a coherent solution:
+- How do the pieces fit together?
+- What is the optimal architecture?
+- What are the tradeoffs?
+- Which approach minimizes risk?
+
+**Phase 4: VALIDATE**
+Verify the solution before implementing:
+- Does it meet all requirements?
+- Have I considered all edge cases?
+- Is it maintainable and extensible?
+- What could cause it to fail?
+
+**Phase 5: EXECUTE**
+Implement with precision:
+- Write complete, production-ready code
+- Include all error handling
+- Add necessary comments for complex logic
+- Test the implementation mentally
+
+### ULTRATHINK PRINCIPLES
+
+1. **Question Everything** - Don't accept surface-level understanding
+2. **Consider Alternatives** - Always evaluate multiple approaches
+3. **Think Adversarially** - What could break this? How to prevent it?
+4. **Optimize for Robustness** - Prefer stable solutions over clever ones
+5. **Document Reasoning** - Explain WHY, not just WHAT
+
+### FOR COMPLEX PROBLEMS
+
+When facing a complex challenge:
+```
+[DECOMPOSITION]
+- Sub-problem 1: ...
+- Sub-problem 2: ...
+- Dependencies: ...
+
+[ANALYSIS]
+- Approach A: Pros/Cons
+- Approach B: Pros/Cons
+- Best choice: ... because ...
+
+[SYNTHESIS]
+- Architecture: ...
+- Key components: ...
+- Integration points: ...
+
+[VALIDATION]
+- Requirement check: ✓/✗
+- Edge cases: Covered/Needs attention
+- Risk assessment: Low/Medium/High
+
+[EXECUTION]
+<tool name="write_file">
+...complete implementation...
+</tool>
+```
+
+### MAXIMUM OUTPUT
+
+In ULTRATHINK mode, use your FULL 16K token output capacity.
+Write complete implementations. No shortcuts. No placeholders.
+Think deeply. Execute precisely.
 """
 }
 
@@ -528,8 +735,22 @@ def detect_task_type(task: str) -> TaskType:
     """
     task_lower = task.lower()
 
+    # Check for ULTRATHINK mode first (explicit activation)
+    if any(w in task_lower for w in ["ultrathink", "deep think", "think deeply", "maximum reasoning"]):
+        return TaskType.ULTRATHINK
+
+    # Check for BUILD tasks
+    if any(w in task_lower for w in ["compile", "msbuild", "cmake", "build error", "linker error",
+                                      "lnk2019", "vcxproj", "build the project", "fix build",
+                                      "compilation", "make build", "build system"]):
+        return TaskType.BUILD
+
     # Check for specific indicators
-    if any(w in task_lower for w in ["implement", "create", "build", "add", "write new"]):
+    if any(w in task_lower for w in ["implement", "create", "add", "write new"]):
+        return TaskType.IMPLEMENT
+
+    # Build without error context = implement
+    if "build" in task_lower and not any(w in task_lower for w in ["error", "fix", "fail"]):
         return TaskType.IMPLEMENT
 
     if any(w in task_lower for w in ["debug", "fix", "bug", "error", "broken", "not working"]):
