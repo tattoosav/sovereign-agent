@@ -468,6 +468,7 @@ class AgentV2:
         self._recent_tool_calls = []  # Reset loop detection
         self._empty_search_count = 0  # Reset unproductive search counter
         self._files_discovered = set()  # Reset discovered files
+        self._loop_breaks = 0  # Reset loop break counter
         total_tokens = 0
 
         # Analyze task complexity
@@ -571,28 +572,50 @@ class AgentV2:
             for tc in tool_calls:
                 logger.info(f"Parsed tool call: {tc.name} with params: {tc.params}")
 
-            # Loop detection - check if we're repeating the same tool calls
+            # Loop detection - check if we're repeating the EXACT same tool calls
+            # Be more lenient for implementation tasks where repeating tools is normal
             if tool_calls:
                 current_call_sig = "|".join(f"{tc.name}:{sorted(tc.params.items())}" for tc in tool_calls)
                 self._recent_tool_calls.append(current_call_sig)
 
-                # Check for loops (same call 3+ times in last 5 iterations)
-                if len(self._recent_tool_calls) >= 3:
-                    recent = self._recent_tool_calls[-5:]
-                    if recent.count(current_call_sig) >= 3:
-                        logger.warning(f"Loop detected: {tool_calls[0].name} called repeatedly")
-                        self.console.print(f"[yellow]Loop detected - breaking out of repeated {tool_calls[0].name} calls[/yellow]")
+                # Only detect loops for non-implementation tasks, and require 4+ exact same calls
+                is_implementation = self._current_task_type in [TaskType.IMPLEMENT, TaskType.REFACTOR]
+                loop_threshold = 5 if is_implementation else 4
 
-                        # Force completion with what we have
-                        self.history.append(Message(role="assistant", content=accumulated_response))
-                        return TurnResult(
-                            response=accumulated_response + "\n\n[Warning: Detected repetitive behavior, stopping early]",
-                            tool_calls=self._turn_tool_calls,
-                            model_used=model_used,
-                            task_type=self._current_task_type,
-                            tokens_used=total_tokens,
-                            iterations=iteration,
-                        )
+                if len(self._recent_tool_calls) >= loop_threshold:
+                    recent = self._recent_tool_calls[-8:]  # Look at more history
+                    if recent.count(current_call_sig) >= loop_threshold:
+                        logger.warning(f"Loop detected: {tool_calls[0].name} called {loop_threshold}+ times")
+                        self.console.print(f"[yellow]Loop detected - injecting guidance[/yellow]")
+
+                        # Instead of stopping, inject guidance to break the loop
+                        loop_break_guidance = """
+LOOP DETECTED - You've repeated the same action multiple times.
+
+REQUIRED: Take a DIFFERENT approach now:
+1. If reading files failed, try a different path or list the directory first
+2. If searching found nothing, try broader patterns or read files directly
+3. If listing directories repeatedly, STOP and work with files you've already found
+
+DO NOT repeat the last action. Try something NEW."""
+
+                        accumulated_response += f"\n\n{loop_break_guidance}"
+                        self._recent_tool_calls = []  # Reset to give it another chance
+
+                        # Only force stop after injecting guidance twice
+                        if hasattr(self, '_loop_breaks') and self._loop_breaks >= 2:
+                            self.history.append(Message(role="assistant", content=accumulated_response))
+                            return TurnResult(
+                                response=accumulated_response + "\n\n[Warning: Multiple loops detected, completing with available results]",
+                                tool_calls=self._turn_tool_calls,
+                                model_used=model_used,
+                                task_type=self._current_task_type,
+                                tokens_used=total_tokens,
+                                iterations=iteration,
+                            )
+                        if not hasattr(self, '_loop_breaks'):
+                            self._loop_breaks = 0
+                        self._loop_breaks += 1
 
             # Check for unproductive exploration (many empty searches)
             if self._empty_search_count >= 4:

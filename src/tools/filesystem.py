@@ -86,11 +86,36 @@ class ReadFileTool(BaseTool):
                 output=content
             )
         except UnicodeDecodeError:
-            return ToolResult(
-                success=False,
-                output="",
-                error=f"Cannot read {path}: not a text file"
-            )
+            # Try other encodings
+            for encoding in ["latin-1", "cp1252", "utf-16"]:
+                try:
+                    content = path.read_text(encoding=encoding)
+                    return ToolResult(
+                        success=True,
+                        output=f"[Read with {encoding} encoding]\n{content}"
+                    )
+                except (UnicodeDecodeError, Exception):
+                    continue
+
+            # If all encodings fail, provide file info
+            try:
+                file_size = path.stat().st_size
+                # Read first bytes to detect type
+                with open(path, "rb") as f:
+                    header = f.read(32)
+                header_hex = header.hex()
+
+                return ToolResult(
+                    success=False,
+                    output=f"File info: {file_size} bytes, header: {header_hex[:32]}...",
+                    error=f"Cannot read {path}: binary file ({file_size} bytes). This appears to be a compiled/binary file, not source code."
+                )
+            except Exception:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Cannot read {path}: binary/non-text file"
+                )
         except Exception as e:
             return ToolResult(
                 success=False,
