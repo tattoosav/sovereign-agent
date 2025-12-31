@@ -38,11 +38,12 @@ class ModelRouter:
     """
 
     # Default model registry (can be overridden by available models)
+    # All models use 32K context for complex code generation
     MODELS = {
         ModelSize.SMALL: ModelConfig(
             size=ModelSize.SMALL,
             name="qwen2.5-coder:7b",
-            max_tokens=2048,
+            max_tokens=8192,  # 8K for small model
             use_cases=[
                 "explain code",
                 "format code",
@@ -54,7 +55,7 @@ class ModelRouter:
         ModelSize.MEDIUM: ModelConfig(
             size=ModelSize.MEDIUM,
             name="qwen2.5-coder:14b",
-            max_tokens=4096,
+            max_tokens=16384,  # 16K for full file generation
             use_cases=[
                 "implement features",
                 "debug issues",
@@ -66,7 +67,7 @@ class ModelRouter:
         ModelSize.LARGE: ModelConfig(
             size=ModelSize.LARGE,
             name="qwen2.5-coder:32b",
-            max_tokens=8192,
+            max_tokens=16384,  # 16K for complex multi-file tasks
             use_cases=[
                 "architecture design",
                 "multi-file refactoring",
