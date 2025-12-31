@@ -156,7 +156,7 @@ class OllamaClient:
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
     ) -> LLMResponse:
         """
         Chat completion (multi-turn).
@@ -209,7 +209,7 @@ class OllamaClient:
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
     ):
         """
         Streaming chat completion.

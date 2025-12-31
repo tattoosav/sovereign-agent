@@ -21,11 +21,11 @@ class LLMConfig:
     """LLM configuration."""
     model: str = "qwen2.5-coder:14b"
     ollama_url: str = "http://localhost:11434"
-    timeout: float = 300.0
+    timeout: float = 600.0  # 10 minutes for large code generation
     temperature: float = 0.1
-    max_tokens: int = 4096
-    max_retries: int = 3
-    retry_delay: float = 1.0
+    max_tokens: int = 16384  # 16K tokens for full file generation
+    max_retries: int = 5  # More retries for reliability
+    retry_delay: float = 2.0
 
 
 @dataclass
@@ -40,7 +40,7 @@ class LoggingConfig:
 @dataclass
 class AgentConfig:
     """Agent configuration."""
-    max_iterations: int = 25  # Increased for complex multi-file tasks
+    max_iterations: int = 50  # High for production code generation
     working_dir: Optional[str] = None
 
 
