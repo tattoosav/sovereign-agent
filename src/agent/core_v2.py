@@ -72,7 +72,7 @@ class AgentConfig:
     enable_rag: bool = True          # Context retrieval
     enable_planning: bool = True     # Task decomposition
     enable_learning: bool = True     # Store successful solutions
-    max_history_messages: int = 10   # Before summarization kicks in
+    max_history_messages: int = 20   # Before summarization kicks in (increased for better context)
     enable_parallel: bool = True     # Parallel tool execution
     parallel_workers: int = 4        # Max concurrent tool executions
 
@@ -144,6 +144,7 @@ class AgentV2:
         self._current_task_type: TaskType = TaskType.GENERAL
         self._turn_tool_calls: list[dict[str, Any]] = []
         self._error_history: list[str] = []
+        self._recent_tool_calls: list[str] = []  # For loop detection
 
     def _select_model(self, task: str) -> str:
         """
@@ -412,6 +413,7 @@ class AgentV2:
             TurnResult with response and metadata
         """
         self._turn_tool_calls = []
+        self._recent_tool_calls = []  # Reset loop detection
         total_tokens = 0
 
         # Detect task type
@@ -495,6 +497,29 @@ class AgentV2:
             # Debug: Log parsed tool calls
             for tc in tool_calls:
                 logger.info(f"Parsed tool call: {tc.name} with params: {tc.params}")
+
+            # Loop detection - check if we're repeating the same tool calls
+            if tool_calls:
+                current_call_sig = "|".join(f"{tc.name}:{sorted(tc.params.items())}" for tc in tool_calls)
+                self._recent_tool_calls.append(current_call_sig)
+
+                # Check for loops (same call 3+ times in last 5 iterations)
+                if len(self._recent_tool_calls) >= 3:
+                    recent = self._recent_tool_calls[-5:]
+                    if recent.count(current_call_sig) >= 3:
+                        logger.warning(f"Loop detected: {tool_calls[0].name} called repeatedly")
+                        self.console.print(f"[yellow]Loop detected - breaking out of repeated {tool_calls[0].name} calls[/yellow]")
+
+                        # Force completion with what we have
+                        self.history.append(Message(role="assistant", content=accumulated_response))
+                        return TurnResult(
+                            response=accumulated_response + "\n\n[Warning: Detected repetitive behavior, stopping early]",
+                            tool_calls=self._turn_tool_calls,
+                            model_used=model_used,
+                            task_type=self._current_task_type,
+                            tokens_used=total_tokens,
+                            iterations=iteration,
+                        )
 
             if not tool_calls:
                 # No tools, task complete
