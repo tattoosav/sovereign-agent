@@ -21,6 +21,8 @@ class Specialization(Enum):
     QT = "qt"
     UNREAL = "unreal"
     GAME_DEV = "game_dev"
+    FIVEM = "fivem"
+    GAME_OVERLAY = "game_overlay"
 
 
 @dataclass
@@ -465,6 +467,346 @@ public class MainViewModel : ObservableObject {
             "Enable Live Visual Tree in Visual Studio",
         ],
     ),
+
+    Specialization.FIVEM: SpecializationConfig(
+        name="FiveM/GTA V Modding",
+        description="FiveM server/client development for GTA V multiplayer",
+        file_extensions=[".lua", ".js", ".cpp", ".h", ".json", ".cfg"],
+        frameworks=["CFX", "CitizenFX", "FiveM", "RedM", "Lua", "NativeUI"],
+        system_prompt_additions="""
+## FiveM/GTA V Modding Expertise
+
+You are an expert in FiveM and GTA V modding:
+- **CFX Framework** - CitizenFX.Core for C#, citizen natives for Lua/JS
+- **Resource System** - fxmanifest.lua/resource.lua structure
+- **Native Functions** - GTA V native database (natives.altv.mp, nativedb.dotindustries.dev)
+- **Networking** - Client/server events, state bags, OneSync
+- **Entity Management** - Vehicles, peds, objects, blips
+- **UI Systems** - NUI (HTML/CSS/JS), NativeUI, custom draws
+
+### Resource Structure
+```
+my_resource/
+├── fxmanifest.lua      # Resource manifest
+├── client/
+│   ├── main.lua        # Client-side logic
+│   └── nui/            # HTML UI files
+├── server/
+│   └── main.lua        # Server-side logic
+└── shared/
+    └── config.lua      # Shared configuration
+```
+
+### fxmanifest.lua Template
+```lua
+fx_version 'cerulean'
+game 'gta5'
+
+author 'Your Name'
+description 'Resource description'
+version '1.0.0'
+
+client_scripts {
+    'client/*.lua'
+}
+server_scripts {
+    'server/*.lua'
+}
+shared_scripts {
+    'shared/*.lua'
+}
+ui_page 'nui/index.html'
+files {
+    'nui/**/*'
+}
+```
+
+### Common Patterns
+
+**Drawing on Screen (Client):**
+```lua
+Citizen.CreateThread(function()
+    while true do
+        -- Draw text, markers, etc.
+        DrawText2D(0.5, 0.5, "Hello World", 0.5)
+        Citizen.Wait(0)  -- Required for render loop
+    end
+end)
+```
+
+**Server-Client Communication:**
+```lua
+-- Server
+RegisterNetEvent('myResource:serverEvent')
+AddEventHandler('myResource:serverEvent', function(data)
+    local source = source
+    TriggerClientEvent('myResource:clientResponse', source, result)
+end)
+
+-- Client
+TriggerServerEvent('myResource:serverEvent', data)
+RegisterNetEvent('myResource:clientResponse')
+AddEventHandler('myResource:clientResponse', function(result)
+    -- Handle response
+end)
+```
+
+### Best Practices
+- Use Citizen.Wait(0) in render loops, higher values elsewhere
+- Namespace events to prevent conflicts
+- Use state bags for synced data (OneSync)
+- Cache frequently used natives
+- Clean up entities and handlers on resource stop
+""",
+        best_practices=[
+            "Use Citizen.Wait(0) only in render/draw loops",
+            "Namespace all events with resource name prefix",
+            "Clean up entities on resource stop",
+            "Use state bags for entity synchronization",
+            "Cache native function results when possible",
+            "Validate client data on server",
+            "Use exports for cross-resource communication",
+        ],
+        common_patterns={
+            "draw_text": '''function DrawText2D(x, y, text, scale)
+    SetTextFont(0)
+    SetTextProportional(1)
+    SetTextScale(scale, scale)
+    SetTextColour(255, 255, 255, 255)
+    SetTextDropshadow(0, 0, 0, 0, 255)
+    SetTextEdge(1, 0, 0, 0, 255)
+    SetTextDropShadow()
+    SetTextOutline()
+    SetTextEntry("STRING")
+    AddTextComponentString(text)
+    DrawText(x, y)
+end''',
+            "esp_box": '''function DrawEntityBox(entity)
+    local pos = GetEntityCoords(entity)
+    local onScreen, screenX, screenY = World3dToScreen2d(pos.x, pos.y, pos.z)
+    if onScreen then
+        local dist = #(GetEntityCoords(PlayerPedId()) - pos)
+        local scale = 1.0 / dist * 2.0
+        DrawRect(screenX, screenY, 0.02 * scale, 0.04 * scale, 255, 0, 0, 150)
+    end
+end''',
+        },
+        debugging_tips=[
+            "Use print() and server console for debugging",
+            "Check F8 console for client errors",
+            "Use resmon for performance profiling",
+            "Test in single-player mode first",
+            "Use lambda menu for entity spawning tests",
+        ],
+    ),
+
+    Specialization.GAME_OVERLAY: SpecializationConfig(
+        name="Game Overlay/ESP Development",
+        description="External game overlays, ESP, memory reading for games",
+        file_extensions=[".cpp", ".h", ".hpp", ".c"],
+        frameworks=["DirectX", "ImGui", "MinHook", "d3d11", "d3d9"],
+        system_prompt_additions="""
+## Game Overlay/ESP Development Expertise
+
+You are an expert in game overlay and ESP development:
+- **Rendering Overlays** - DirectX 9/11/12, OpenGL, Vulkan hooks
+- **ImGui Integration** - Dear ImGui for in-game menus and ESP
+- **Memory Reading** - RPM/WPM, pattern scanning, pointer chains
+- **Hooking** - Present/EndScene hooks, MinHook, detours
+- **Entity Systems** - Reading game entity lists, world-to-screen
+- **Anti-detection** - Manual mapping, syscalls, signature hiding
+
+### Overlay Architecture
+```
+┌─────────────────────────────────────────┐
+│              Your Overlay               │
+├─────────────────────────────────────────┤
+│  ┌─────────────┐    ┌────────────────┐ │
+│  │  ESP Logic  │    │   ImGui Menu   │ │
+│  └──────┬──────┘    └───────┬────────┘ │
+│         │                    │          │
+│    ┌────┴────────────────────┴────┐    │
+│    │      Render Engine           │    │
+│    │  (DirectX Present Hook)      │    │
+│    └──────────────┬───────────────┘    │
+│                   │                     │
+│    ┌──────────────┴───────────────┐    │
+│    │      Memory Reader           │    │
+│    │  (RPM / Pattern Scanner)     │    │
+│    └──────────────────────────────┘    │
+└─────────────────────────────────────────┘
+```
+
+### DirectX 11 Hook Pattern
+```cpp
+// Function pointer types
+typedef HRESULT(__stdcall* D3D11PresentHook)(IDXGISwapChain*, UINT, UINT);
+D3D11PresentHook oPresent = nullptr;
+
+HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
+    static bool init = false;
+    if (!init) {
+        // Get device and context
+        pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&pDevice);
+        pDevice->GetImmediateContext(&pContext);
+
+        // Initialize ImGui
+        ImGui::CreateContext();
+        ImGui_ImplDX11_Init(pDevice, pContext);
+
+        init = true;
+    }
+
+    // Start ImGui frame
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    // Draw your ESP/Menu here
+    RenderESP();
+    RenderMenu();
+
+    // End frame
+    ImGui::Render();
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+    return oPresent(pSwapChain, SyncInterval, Flags);
+}
+```
+
+### World to Screen Conversion
+```cpp
+bool WorldToScreen(Vector3 world, Vector2& screen) {
+    // Get view matrix from game memory
+    Matrix4x4 viewMatrix = ReadViewMatrix();
+
+    float w = viewMatrix._41 * world.x + viewMatrix._42 * world.y +
+              viewMatrix._43 * world.z + viewMatrix._44;
+
+    if (w < 0.001f) return false;
+
+    float x = viewMatrix._11 * world.x + viewMatrix._12 * world.y +
+              viewMatrix._13 * world.z + viewMatrix._14;
+    float y = viewMatrix._21 * world.x + viewMatrix._22 * world.y +
+              viewMatrix._23 * world.z + viewMatrix._24;
+
+    screen.x = (screenWidth / 2) * (1 + x / w);
+    screen.y = (screenHeight / 2) * (1 - y / w);
+    return true;
+}
+```
+
+### ESP Drawing Patterns
+```cpp
+void DrawESPBox(Vector3 position, Vector3 size, ImColor color) {
+    Vector2 screenPos;
+    if (!WorldToScreen(position, screenPos)) return;
+
+    float height = /* calculate based on distance */;
+    float width = height * 0.5f;
+
+    ImGui::GetBackgroundDrawList()->AddRect(
+        ImVec2(screenPos.x - width/2, screenPos.y - height),
+        ImVec2(screenPos.x + width/2, screenPos.y),
+        color, 0.0f, 0, 2.0f
+    );
+}
+
+void DrawHealthBar(Vector2 pos, float health, float maxHealth, float width, float height) {
+    float percentage = health / maxHealth;
+    ImColor barColor = ImColor(
+        (int)(255 * (1 - percentage)),
+        (int)(255 * percentage),
+        0
+    );
+
+    ImGui::GetBackgroundDrawList()->AddRectFilled(
+        ImVec2(pos.x, pos.y),
+        ImVec2(pos.x + width * percentage, pos.y + height),
+        barColor
+    );
+}
+```
+
+### Memory Reading Pattern
+```cpp
+template<typename T>
+T Read(uintptr_t address) {
+    T buffer;
+    ReadProcessMemory(hProcess, (LPCVOID)address, &buffer, sizeof(T), nullptr);
+    return buffer;
+}
+
+template<typename T>
+T ReadChain(uintptr_t base, std::vector<uintptr_t> offsets) {
+    uintptr_t addr = base;
+    for (size_t i = 0; i < offsets.size() - 1; i++) {
+        addr = Read<uintptr_t>(addr + offsets[i]);
+        if (!addr) return T{};
+    }
+    return Read<T>(addr + offsets.back());
+}
+```
+
+### Best Practices
+- Use ImGui::GetBackgroundDrawList() for ESP (renders behind menu)
+- Cache view matrix per frame, not per entity
+- Use pattern scanning for offsets (survives updates)
+- Handle edge cases (off-screen, behind camera)
+- Optimize entity iteration (spatial partitioning)
+- Clean up hooks on exit
+""",
+        best_practices=[
+            "Hook Present/EndScene for rendering",
+            "Use ImGui for easy menu/ESP rendering",
+            "Cache view matrix once per frame",
+            "Pattern scan for offsets to survive game updates",
+            "Use GetBackgroundDrawList() for ESP behind menus",
+            "Handle WorldToScreen edge cases (behind camera)",
+            "Clean up all hooks on exit",
+            "Use manual map or dll injection carefully",
+        ],
+        common_patterns={
+            "viewmatrix": '''struct ViewMatrix {
+    float matrix[16];
+    // Read from game: usually near camera struct
+};
+
+bool W2S(Vector3 world, Vector2& screen, ViewMatrix& vm, int width, int height) {
+    float w = vm.matrix[12] * world.x + vm.matrix[13] * world.y +
+              vm.matrix[14] * world.z + vm.matrix[15];
+    if (w < 0.001f) return false;
+
+    float x = vm.matrix[0] * world.x + vm.matrix[1] * world.y +
+              vm.matrix[2] * world.z + vm.matrix[3];
+    float y = vm.matrix[4] * world.x + vm.matrix[5] * world.y +
+              vm.matrix[6] * world.z + vm.matrix[7];
+
+    screen.x = (width / 2.0f) * (1.0f + x / w);
+    screen.y = (height / 2.0f) * (1.0f - y / w);
+    return true;
+}''',
+            "pattern_scan": '''uintptr_t PatternScan(const char* module, const char* pattern) {
+    MODULEINFO modInfo;
+    HMODULE hModule = GetModuleHandleA(module);
+    GetModuleInformation(GetCurrentProcess(), hModule, &modInfo, sizeof(modInfo));
+
+    uintptr_t start = (uintptr_t)hModule;
+    uintptr_t end = start + modInfo.SizeOfImage;
+
+    // Convert pattern to bytes and scan
+    // ... implementation
+}''',
+        },
+        debugging_tips=[
+            "Use ReClass.NET for reverse engineering structures",
+            "Use Cheat Engine for finding offsets",
+            "Test hooks in windowed mode first",
+            "Use x64dbg for debugging injection",
+            "Log to file since console may not be available",
+            "Use Process Hacker to verify memory regions",
+        ],
+    ),
 }
 
 
@@ -475,13 +817,31 @@ def get_specialization(spec: Specialization) -> SpecializationConfig:
 
 def detect_specialization(
     file_extensions: list[str],
-    frameworks: list[str] | None = None
+    frameworks: list[str] | None = None,
+    file_names: list[str] | None = None,
+    content_hints: list[str] | None = None
 ) -> Specialization:
-    """Detect the best specialization based on file types and frameworks."""
+    """Detect the best specialization based on file types, frameworks, and content."""
     extensions = set(ext.lower() for ext in file_extensions)
     frameworks = set(f.lower() for f in (frameworks or []))
+    file_names = set(f.lower() for f in (file_names or []))
+    content_hints = set(h.lower() for h in (content_hints or []))
 
-    # Check for specific frameworks first
+    # Check for FiveM/GTA modding first
+    if any(f in file_names for f in ["fxmanifest.lua", "resource.lua", "__resource.lua"]):
+        return Specialization.FIVEM
+    if any(h in content_hints for h in ["citizenfx", "fivem", "cfx", "gta", "redm"]):
+        return Specialization.FIVEM
+    if ".lua" in extensions and any(f in frameworks for f in ["fivem", "cfx", "citizenfx"]):
+        return Specialization.FIVEM
+
+    # Check for game overlay/ESP development
+    if any(h in content_hints for h in ["imgui", "d3d11", "d3d9", "dxgi", "overlay", "esp", "aimbot", "wallhack"]):
+        return Specialization.GAME_OVERLAY
+    if any(f in frameworks for f in ["imgui", "directx", "minhook", "detours"]):
+        return Specialization.GAME_OVERLAY
+
+    # Check for specific frameworks
     if "wpf" in frameworks or ".xaml" in extensions:
         return Specialization.WPF
     if "winforms" in frameworks:
@@ -493,9 +853,16 @@ def detect_specialization(
     if ".cs" in extensions or ".csproj" in extensions:
         return Specialization.DOTNET
     if any(ext in extensions for ext in [".cpp", ".c", ".h", ".hpp"]):
+        # Check if it's overlay/game related
+        if any(h in content_hints for h in ["hook", "inject", "render", "draw", "entity"]):
+            return Specialization.GAME_OVERLAY
         if any(ext in extensions for ext in [".rc", ".def"]) or "win32" in frameworks:
             return Specialization.CPP_GUI
         return Specialization.CPP
+
+    if ".lua" in extensions:
+        # Lua without FiveM markers - could still be game modding
+        return Specialization.FIVEM  # Default Lua to FiveM context
 
     return Specialization.GENERAL
 

@@ -283,24 +283,38 @@ TASK_PROMPTS = {
 
 **Step 1: Get the Big Picture (1-2 tool calls)**
 - List the root directory to see project structure
-- Look for README, package.json, Cargo.toml, CMakeLists.txt, etc.
+- Look for README, package.json, CMakeLists.txt, fxmanifest.lua, etc.
+- Identify the PROJECT TYPE immediately (game mod, overlay, web app, etc.)
 
 **Step 2: Identify Key Components (2-3 tool calls)**
-- Read main entry point files
+- Read main entry point files (main.cpp, main.lua, index.js)
 - Identify core modules/packages
 - Note the tech stack and frameworks
+- Look for domain-specific patterns:
+  - Game mods: Check for natives, hooks, entity handling
+  - Overlays: Look for DirectX, ImGui, render functions
+  - FiveM: Check fxmanifest.lua, client/server folders
 
 **Step 3: Deep Dive if Needed (1-2 tool calls)**
 - Only explore specific areas if user asked
 - Read key source files for detailed understanding
+- Focus on the CORE FUNCTIONALITY, not boilerplate
 
 **Step 4: Synthesize and Report (NO more tool calls)**
-- Summarize the project purpose
-- List key technologies and patterns
-- Describe the architecture
-- Note any important findings
+- **Project Type**: (e.g., FiveM mod, game overlay, ESP tool)
+- **Purpose**: What does this project do?
+- **Tech Stack**: Languages, frameworks, libraries
+- **Architecture**: How is it structured?
+- **Key Features**: Main functionality identified
+- **Enhancement Opportunities**: How could it be improved?
 
-**STOP exploring when you can answer: What is this project and how is it structured?**
+**IMPORTANT: Understand the DOMAIN context!**
+- If you see ImGui + DirectX + entity reading = Game overlay/ESP
+- If you see Lua + fxmanifest + natives = FiveM mod
+- If you see hooks + memory reading = Game cheating tool
+- Provide domain-specific advice based on what you find!
+
+**STOP exploring when you can explain WHAT it does and HOW to improve it.**
 """,
 
     TaskType.GENERAL: """\
