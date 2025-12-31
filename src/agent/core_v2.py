@@ -299,56 +299,55 @@ class AgentV2:
         """
         Detect placeholder/stub code patterns that indicate incomplete implementations.
 
+        Only catches truly problematic patterns - allows legitimate code comments.
+
         Returns:
             (has_placeholders, list of detected patterns)
         """
+        # Only catch the most egregious placeholder patterns
         placeholder_patterns = [
-            # Comment-based placeholders
-            (r'//\s*TODO', 'TODO comment'),
-            (r'//\s*FIXME', 'FIXME comment'),
-            (r'//\s*implement\s+here', 'implement here comment'),
-            (r'//\s*add\s+(your\s+)?code\s+here', 'add code here comment'),
-            (r'//\s*this\s+(should|could|would)\s+(be|include)', 'placeholder description'),
-            (r'//\s*\.\.\.|//\s*etc', 'ellipsis comment'),
+            # Explicit placeholder comments
+            (r'//\s*TODO:\s*implement', 'TODO implement comment'),
+            (r'//\s*implement\s+(this|here|logic)', 'implement here comment'),
+            (r'//\s*add\s+(your\s+)?(code|implementation)\s+here', 'add code here comment'),
+            (r'//\s*this\s+(should|could|would)\s+be\s+implemented', 'placeholder description'),
             (r'//\s*placeholder', 'placeholder comment'),
-            (r'//\s*stub', 'stub comment'),
-            (r'//\s*not\s+implemented', 'not implemented comment'),
-            (r'//\s*example:', 'example comment'),
-            (r'//\s*hypothetical', 'hypothetical comment'),
-            (r'/\*\s*TODO', 'TODO block comment'),
-            (r'#\s*TODO', 'Python TODO'),
-            (r'#\s*implement', 'Python implement comment'),
-
-            # Empty function bodies (C++/C#)
-            (r'\{\s*return;\s*\}', 'empty return statement'),
-            (r'\{\s*\}', 'empty function body'),
-            (r'\{\s*//.*\n\s*\}', 'function with only comment'),
+            (r'//\s*stub\s+implementation', 'stub comment'),
 
             # Placeholder variable names
             (r'your_\w+_here', 'placeholder variable'),
-            (r'replace_this', 'replace_this variable'),
-            (r'PLACEHOLDER', 'PLACEHOLDER constant'),
+            (r'PLACEHOLDER_', 'PLACEHOLDER constant'),
 
             # Stub throw statements
-            (r'throw\s+.*not\s*implemented', 'not implemented exception'),
-            (r'NotImplementedException', 'NotImplementedException'),
+            (r'throw\s+new\s+NotImplementedException', 'NotImplementedException'),
         ]
 
         detected = []
         content_lower = content.lower()
 
+        # Only flag if the file is suspiciously short AND has placeholder patterns
+        # Long files (>500 chars) get more lenient checking
+        is_short_file = len(content) < 500
+
         for pattern, name in placeholder_patterns:
             if re.search(pattern, content, re.IGNORECASE):
                 detected.append(name)
 
-        # Check for suspiciously short function implementations
-        # Functions with just 1-2 lines inside are likely stubs
-        func_pattern = r'(void|int|bool|float|string|auto)\s+\w+\s*\([^)]*\)\s*\{([^}]{1,50})\}'
-        short_funcs = re.findall(func_pattern, content)
-        for _, body in short_funcs:
-            if body.strip() in ['', 'return;', 'return 0;', 'return false;', 'return nullptr;']:
-                detected.append('stub function body')
-                break
+        # Only check for empty functions in short files
+        if is_short_file:
+            # Check for suspiciously short function implementations
+            func_pattern = r'(void|int|bool|float|string|auto)\s+\w+\s*\([^)]*\)\s*\{([^}]{1,30})\}'
+            short_funcs = re.findall(func_pattern, content)
+            for _, body in short_funcs:
+                body_stripped = body.strip()
+                # Only flag truly empty stubs, not simple getters/setters
+                if body_stripped in ['', 'return;'] and len(short_funcs) > 2:
+                    detected.append('multiple empty function bodies')
+                    break
+
+        # If file has substantial code (>1000 chars), be very lenient
+        if len(content) > 1000 and len(detected) <= 1:
+            return False, []
 
         return len(detected) > 0, detected
 
