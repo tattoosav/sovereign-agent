@@ -8,11 +8,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import tempfile
+import shutil
+import zipfile
+import os
 
 from src.api.session import SessionManager
 
@@ -232,6 +236,225 @@ def create_app() -> FastAPI:
             error_stats=session.agent.error_recovery.get_error_stats()
         )
         return MetricsResponse(session_id=session_id, metrics=metrics)
+
+    # File upload storage per session
+    session_files: dict[str, Path] = {}
+
+    @app.post("/upload")
+    async def upload_files(
+        files: list[UploadFile] = File(...),
+        session_id: str = Form(...)
+    ):
+        """Upload files for the agent to analyze."""
+        if session_manager is None:
+            raise HTTPException(status_code=503, detail="Server not initialized")
+
+        session = session_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Create temp directory for this session
+        if session_id not in session_files:
+            session_files[session_id] = Path(tempfile.mkdtemp(prefix=f"sovereign_{session_id[:8]}_"))
+
+        upload_dir = session_files[session_id]
+        uploaded = []
+
+        for file in files:
+            if file.filename:
+                # Handle zip files specially
+                if file.filename.endswith('.zip'):
+                    # Save and extract zip
+                    zip_path = upload_dir / file.filename
+                    with open(zip_path, "wb") as f:
+                        shutil.copyfileobj(file.file, f)
+
+                    # Extract to subdirectory
+                    extract_dir = upload_dir / file.filename.replace('.zip', '')
+                    extract_dir.mkdir(exist_ok=True)
+                    with zipfile.ZipFile(zip_path, 'r') as zf:
+                        zf.extractall(extract_dir)
+
+                    # Count extracted files
+                    count = sum(1 for _ in extract_dir.rglob('*') if _.is_file())
+                    uploaded.append({"name": file.filename, "type": "zip", "files_extracted": count, "path": str(extract_dir)})
+                    zip_path.unlink()  # Remove zip after extraction
+                else:
+                    # Save regular file
+                    file_path = upload_dir / file.filename
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(file_path, "wb") as f:
+                        shutil.copyfileobj(file.file, f)
+                    uploaded.append({"name": file.filename, "type": "file", "path": str(file_path)})
+
+        return JSONResponse({
+            "status": "success",
+            "uploaded": uploaded,
+            "upload_dir": str(upload_dir),
+            "message": f"Uploaded {len(uploaded)} file(s). Use 'analyze project at {upload_dir}' to understand the codebase."
+        })
+
+    @app.post("/upload/analyze")
+    async def analyze_uploaded_project(session_id: str = Form(...)):
+        """Analyze uploaded project and return stack information."""
+        if session_manager is None:
+            raise HTTPException(status_code=503, detail="Server not initialized")
+
+        session = session_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session_id not in session_files:
+            raise HTTPException(status_code=404, detail="No files uploaded for this session")
+
+        upload_dir = session_files[session_id]
+
+        # Analyze the project structure
+        analysis = analyze_project_structure(upload_dir)
+
+        return JSONResponse({
+            "status": "success",
+            "analysis": analysis,
+            "upload_dir": str(upload_dir)
+        })
+
+    @app.get("/upload/files/{session_id}")
+    async def list_uploaded_files(session_id: str):
+        """List all uploaded files for a session."""
+        if session_id not in session_files:
+            return JSONResponse({"files": [], "message": "No files uploaded"})
+
+        upload_dir = session_files[session_id]
+        files = []
+        for f in upload_dir.rglob('*'):
+            if f.is_file():
+                files.append({
+                    "name": f.name,
+                    "path": str(f.relative_to(upload_dir)),
+                    "size": f.stat().st_size
+                })
+
+        return JSONResponse({"files": files, "upload_dir": str(upload_dir)})
+
+    def analyze_project_structure(project_path: Path) -> dict:
+        """Analyze project to detect stack, frameworks, and structure."""
+        analysis = {
+            "languages": [],
+            "frameworks": [],
+            "package_managers": [],
+            "config_files": [],
+            "structure": {},
+            "entry_points": [],
+            "file_count": 0,
+            "recommendations": []
+        }
+
+        # File extension counters
+        ext_count: dict[str, int] = {}
+
+        # Known config/package files
+        config_patterns = {
+            "package.json": ("JavaScript/Node.js", "npm"),
+            "package-lock.json": ("JavaScript/Node.js", "npm"),
+            "yarn.lock": ("JavaScript/Node.js", "yarn"),
+            "pnpm-lock.yaml": ("JavaScript/Node.js", "pnpm"),
+            "pyproject.toml": ("Python", "uv/pip"),
+            "requirements.txt": ("Python", "pip"),
+            "setup.py": ("Python", "setuptools"),
+            "Pipfile": ("Python", "pipenv"),
+            "Cargo.toml": ("Rust", "cargo"),
+            "go.mod": ("Go", "go modules"),
+            "Gemfile": ("Ruby", "bundler"),
+            "composer.json": ("PHP", "composer"),
+            "pom.xml": ("Java", "maven"),
+            "build.gradle": ("Java/Kotlin", "gradle"),
+            "*.csproj": ("C#/.NET", "dotnet"),
+            "*.sln": ("C#/.NET", "Visual Studio"),
+            "CMakeLists.txt": ("C/C++", "cmake"),
+            "Makefile": ("C/C++", "make"),
+            "tsconfig.json": ("TypeScript", None),
+            "vite.config.*": ("Vite", None),
+            "webpack.config.*": ("Webpack", None),
+            "next.config.*": ("Next.js", None),
+            "nuxt.config.*": ("Nuxt.js", None),
+            "angular.json": ("Angular", None),
+            ".eslintrc*": ("ESLint", None),
+            ".prettierrc*": ("Prettier", None),
+            "Dockerfile": ("Docker", None),
+            "docker-compose.*": ("Docker Compose", None),
+        }
+
+        for f in project_path.rglob('*'):
+            if f.is_file():
+                analysis["file_count"] += 1
+
+                # Count extensions
+                ext = f.suffix.lower()
+                ext_count[ext] = ext_count.get(ext, 0) + 1
+
+                # Check for config files
+                for pattern, (lang, pkg) in config_patterns.items():
+                    if pattern.startswith('*'):
+                        if f.name.endswith(pattern[1:]):
+                            if lang not in analysis["languages"]:
+                                analysis["languages"].append(lang)
+                            if pkg and pkg not in analysis["package_managers"]:
+                                analysis["package_managers"].append(pkg)
+                            analysis["config_files"].append(f.name)
+                    elif '*' in pattern:
+                        base = pattern.split('*')[0]
+                        if f.name.startswith(base):
+                            if lang not in analysis["frameworks"]:
+                                analysis["frameworks"].append(lang)
+                            analysis["config_files"].append(f.name)
+                    elif f.name == pattern:
+                        if lang and lang not in analysis["languages"]:
+                            analysis["languages"].append(lang)
+                        if pkg and pkg not in analysis["package_managers"]:
+                            analysis["package_managers"].append(pkg)
+                        analysis["config_files"].append(f.name)
+
+                # Detect entry points
+                if f.name in ["main.py", "app.py", "index.js", "index.ts", "main.rs", "main.go", "Program.cs", "main.cpp"]:
+                    analysis["entry_points"].append(str(f.relative_to(project_path)))
+
+        # Determine primary languages from file extensions
+        lang_map = {
+            ".py": "Python",
+            ".js": "JavaScript",
+            ".ts": "TypeScript",
+            ".tsx": "TypeScript/React",
+            ".jsx": "JavaScript/React",
+            ".rs": "Rust",
+            ".go": "Go",
+            ".java": "Java",
+            ".cs": "C#",
+            ".cpp": "C++",
+            ".c": "C",
+            ".rb": "Ruby",
+            ".php": "PHP",
+            ".vue": "Vue.js",
+            ".svelte": "Svelte",
+        }
+
+        for ext, count in sorted(ext_count.items(), key=lambda x: -x[1])[:5]:
+            if ext in lang_map and lang_map[ext] not in analysis["languages"]:
+                analysis["languages"].append(lang_map[ext])
+
+        # Build structure summary (top-level directories)
+        for item in project_path.iterdir():
+            if item.is_dir() and not item.name.startswith('.'):
+                file_count = sum(1 for _ in item.rglob('*') if _.is_file())
+                analysis["structure"][item.name] = file_count
+
+        # Add recommendations
+        if "Python" in analysis["languages"]:
+            analysis["recommendations"].append("Consider using type hints for better code quality")
+        if "TypeScript" in analysis["languages"] or "JavaScript" in analysis["languages"]:
+            if "ESLint" not in str(analysis["config_files"]):
+                analysis["recommendations"].append("Consider adding ESLint for code linting")
+
+        return analysis
 
     @app.post("/chat", response_model=ChatResponse)
     async def chat(request: ChatRequest) -> ChatResponse:

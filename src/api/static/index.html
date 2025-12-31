@@ -23,13 +23,22 @@
             </div>
 
             <div class="input-container">
+                <div id="upload-zone" class="upload-zone">
+                    <input type="file" id="file-input" multiple hidden>
+                    <div class="upload-content">
+                        <span class="upload-icon">📁</span>
+                        <span>Drop files/zip here or <button id="browse-btn" class="btn-link">browse</button></span>
+                    </div>
+                    <div id="upload-status" class="upload-status hidden"></div>
+                </div>
                 <textarea
                     id="user-input"
-                    placeholder="Ask me anything about your code..."
+                    placeholder="Ask me anything about your code... (Upload files above to analyze a project)"
                     rows="3"
                 ></textarea>
                 <div class="input-actions">
                     <button id="send-btn" class="btn primary">Send</button>
+                    <button id="analyze-btn" class="btn secondary" disabled>Analyze Project</button>
                     <button id="clear-btn" class="btn secondary">Clear</button>
                 </div>
             </div>

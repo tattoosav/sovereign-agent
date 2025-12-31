@@ -21,6 +21,14 @@ class SovereignAgent {
         this.modalBody = document.getElementById('modal-body');
         this.modalClose = document.querySelector('.modal .close');
 
+        // File upload elements
+        this.uploadZone = document.getElementById('upload-zone');
+        this.fileInput = document.getElementById('file-input');
+        this.browseBtn = document.getElementById('browse-btn');
+        this.analyzeBtn = document.getElementById('analyze-btn');
+        this.uploadStatus = document.getElementById('upload-status');
+        this.uploadDir = null;
+
         this.init();
     }
 
@@ -45,6 +53,38 @@ class SovereignAgent {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.sendMessage();
+            }
+        });
+
+        // File upload events
+        this.browseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.fileInput.click();
+        });
+
+        this.fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                this.uploadFiles(e.target.files);
+            }
+        });
+
+        this.analyzeBtn.addEventListener('click', () => this.analyzeProject());
+
+        // Drag and drop
+        this.uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            this.uploadZone.classList.add('dragover');
+        });
+
+        this.uploadZone.addEventListener('dragleave', () => {
+            this.uploadZone.classList.remove('dragover');
+        });
+
+        this.uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            this.uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                this.uploadFiles(e.dataTransfer.files);
             }
         });
     }
@@ -256,6 +296,115 @@ class SovereignAgent {
             this.showModal();
         } catch (error) {
             console.error('Failed to load metrics:', error);
+        }
+    }
+
+    async uploadFiles(files) {
+        if (!this.sessionId) {
+            this.addSystemMessage('Please wait for session to be created');
+            return;
+        }
+
+        this.uploadStatus.classList.remove('hidden');
+        this.uploadStatus.textContent = `Uploading ${files.length} file(s)...`;
+
+        const formData = new FormData();
+        formData.append('session_id', this.sessionId);
+
+        for (const file of files) {
+            formData.append('files', file);
+        }
+
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                this.uploadDir = data.upload_dir;
+                this.analyzeBtn.disabled = false;
+
+                const fileList = data.uploaded.map(f =>
+                    f.type === 'zip' ? `${f.name} (${f.files_extracted} files extracted)` : f.name
+                ).join(', ');
+
+                this.uploadStatus.innerHTML = `<span class="success">Uploaded: ${fileList}</span>`;
+                this.addSystemMessage(`Files uploaded to ${data.upload_dir}. Click "Analyze Project" to understand the codebase.`);
+            } else {
+                this.uploadStatus.innerHTML = `<span class="error">Upload failed</span>`;
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            this.uploadStatus.innerHTML = `<span class="error">Upload failed: ${error.message}</span>`;
+        }
+    }
+
+    async analyzeProject() {
+        if (!this.sessionId || !this.uploadDir) return;
+
+        this.analyzeBtn.disabled = true;
+        this.setStatus('thinking', 'Analyzing project...');
+
+        try {
+            const formData = new FormData();
+            formData.append('session_id', this.sessionId);
+
+            const response = await fetch('/upload/analyze', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const analysis = data.analysis;
+
+                // Format analysis results
+                let analysisText = `**Project Analysis**\n\n`;
+                analysisText += `**Languages:** ${analysis.languages.join(', ') || 'Unknown'}\n`;
+                analysisText += `**Frameworks:** ${analysis.frameworks.join(', ') || 'None detected'}\n`;
+                analysisText += `**Package Managers:** ${analysis.package_managers.join(', ') || 'None detected'}\n`;
+                analysisText += `**Files:** ${analysis.file_count}\n`;
+
+                if (analysis.entry_points.length > 0) {
+                    analysisText += `**Entry Points:** ${analysis.entry_points.join(', ')}\n`;
+                }
+
+                if (analysis.config_files.length > 0) {
+                    analysisText += `**Config Files:** ${analysis.config_files.join(', ')}\n`;
+                }
+
+                if (Object.keys(analysis.structure).length > 0) {
+                    analysisText += `\n**Structure:**\n`;
+                    for (const [dir, count] of Object.entries(analysis.structure)) {
+                        analysisText += `  - ${dir}/: ${count} files\n`;
+                    }
+                }
+
+                if (analysis.recommendations.length > 0) {
+                    analysisText += `\n**Recommendations:**\n`;
+                    for (const rec of analysis.recommendations) {
+                        analysisText += `  - ${rec}\n`;
+                    }
+                }
+
+                this.addMessage('assistant', analysisText);
+
+                // Auto-send a message to the agent to understand the project
+                const contextMessage = `I've uploaded a project. Here's the analysis:\n${analysisText}\n\nThe project files are at: ${this.uploadDir}\n\nPlease explore the codebase and let me know what you find. What is this project about?`;
+                this.inputEl.value = contextMessage;
+            }
+
+            this.setStatus('connected', 'Connected');
+        } catch (error) {
+            console.error('Analysis error:', error);
+            this.addSystemMessage(`Analysis failed: ${error.message}`);
+            this.setStatus('disconnected', 'Error');
+        } finally {
+            this.analyzeBtn.disabled = false;
         }
     }
 

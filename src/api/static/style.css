@@ -210,6 +210,66 @@ main {
     overflow-y: auto;
 }
 
+/* Upload Zone */
+.upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.upload-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.upload-icon {
+    font-size: 1.25rem;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: inherit;
+    text-decoration: underline;
+}
+
+.btn-link:hover {
+    color: var(--accent-hover);
+}
+
+.upload-status {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.upload-status .success {
+    color: var(--success);
+}
+
+.upload-status .error {
+    color: var(--error);
+}
+
+.hidden {
+    display: none;
+}
+
 /* Input Area */
 .input-container {
     background: var(--bg-secondary);
