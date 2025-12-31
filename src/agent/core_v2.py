@@ -549,7 +549,10 @@ class AgentV2:
         self._recent_tool_calls = []  # Reset loop detection
         self._empty_search_count = 0  # Reset unproductive search counter
         self._files_discovered = set()  # Reset discovered files
+        self._files_written = set()  # Track files written this turn
         self._loop_breaks = 0  # Reset loop break counter
+        self._refusal_overrides = 0  # Reset refusal counter
+        self._ultrathink_enabled = False  # Ultrathink mode
         total_tokens = 0
 
         # Analyze task complexity
@@ -569,6 +572,16 @@ class AgentV2:
         # Detect task type
         self._current_task_type = detect_task_type(user_input)
         self.console.print(f"[dim]Task type: {self._current_task_type.value}[/dim]")
+
+        # Enable ultrathink for complex implementation tasks
+        ultrathink_triggers = ["ultrathink", "deep think", "think hard", "complex", "advanced", "full system", "complete implementation"]
+        if any(trigger in user_input.lower() for trigger in ultrathink_triggers):
+            self._ultrathink_enabled = True
+            self._current_task_type = TaskType.ULTRATHINK
+            self.console.print(f"[magenta bold]ULTRATHINK MODE ENABLED[/magenta bold]")
+        elif self._task_complexity == TaskComplexity.PROJECT:
+            self._ultrathink_enabled = True
+            self.console.print(f"[magenta]Ultrathink auto-enabled for project-level task[/magenta]")
 
         # Select model based on task complexity
         model_used = self._select_model(user_input)
@@ -872,6 +885,15 @@ STOP SEARCHING. Instead:
                     elif call.name == "read_file":
                         # Successful file read - good progress
                         self._empty_search_count = max(0, self._empty_search_count - 1)
+                    elif call.name == "write_file":
+                        # Track files written for completion detection
+                        if "path" in call.params:
+                            self._files_written.add(call.params["path"])
+                            self.console.print(f"[green]Wrote: {call.params['path']}[/green]")
+                    elif call.name == "str_replace":
+                        # Track files modified
+                        if "path" in call.params:
+                            self._files_written.add(call.params["path"])
                 else:
                     self.console.print(f"[red]FAIL {call.name} failed: {result.error}[/red]")
                     self._error_history.append(f"{call.name} failed: {result.error}")
@@ -910,6 +932,29 @@ STOP SEARCHING. Instead:
                 completed_early=False,
                 hit_max=False
             )
+
+            # SMART COMPLETION DETECTION for implementation tasks
+            is_impl_task = self._current_task_type in [TaskType.IMPLEMENT, TaskType.REFACTOR, TaskType.ULTRATHINK]
+            files_written_count = len(self._files_written)
+
+            if is_impl_task and files_written_count >= 3:
+                # Check if we should complete - written enough files
+                self.console.print(f"[cyan]Implementation progress: {files_written_count} files written[/cyan]")
+
+                # After 5+ files or 8+ iterations with files written, suggest completion
+                if files_written_count >= 5 or (iteration >= 8 and files_written_count >= 3):
+                    completion_prompt = f"""
+TASK COMPLETION CHECK:
+You have written {files_written_count} files: {', '.join(list(self._files_written)[-5:])}
+
+If the implementation is COMPLETE:
+- Provide a summary of what was implemented
+- List the files created/modified
+- Do NOT use any more tools
+
+If more files are needed, continue writing them.
+"""
+                    tool_results_text += f"\n\n{completion_prompt}"
 
             # Add to history
             self.history.append(Message(role="assistant", content=llm_output))
