@@ -218,8 +218,9 @@ class SovereignAgent {
 
         } catch (error) {
             console.error('Streaming error:', error);
-            contentEl.innerHTML = 'Error: Failed to get response';
-            this.setStatus('disconnected', 'Error');
+            const errorDetails = error.message || error.toString() || 'Unknown streaming error';
+            contentEl.innerHTML = `<span class="error">Streaming Error: ${this.escapeHtml(errorDetails)}</span>`;
+            this.setStatus('disconnected', 'Error: ' + errorDetails.slice(0, 30));
 
             // Fall back to non-streaming
             await this.sendMessageNonStreaming(message, messageEl);
@@ -279,8 +280,9 @@ class SovereignAgent {
             this.setStatus('connected', 'Connected');
         } catch (error) {
             console.error('Chat error:', error);
-            messageEl.querySelector('.message-content').innerHTML = '<span class="error">Error: Failed to get response</span>';
-            this.setStatus('disconnected', 'Error');
+            const errorDetails = error.message || error.toString() || 'Unknown network error';
+            messageEl.querySelector('.message-content').innerHTML = `<span class="error">Error: ${this.escapeHtml(errorDetails)}</span>`;
+            this.setStatus('disconnected', 'Error: ' + errorDetails.slice(0, 30));
         } finally {
             this.sendBtn.disabled = false;
             this.scrollToBottom();

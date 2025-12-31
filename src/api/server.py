@@ -500,11 +500,19 @@ def create_app() -> FastAPI:
 
         except Exception as e:
             logger.exception(f"Error processing chat: {e}")
+            # Provide more detailed error message
+            error_msg = str(e)
+            if "timeout" in error_msg.lower():
+                error_msg = f"LLM timeout: {error_msg}. Model may be overloaded."
+            elif "context" in error_msg.lower() or "length" in error_msg.lower():
+                error_msg = f"Context overflow: {error_msg}. Try a shorter message."
+            elif "connection" in error_msg.lower():
+                error_msg = f"Connection error: {error_msg}. Check if Ollama is running."
             return ChatResponse(
                 response="",
                 session_id=session.id,
                 status="error",
-                error=str(e),
+                error=error_msg,
             )
 
     @app.post("/chat/stream")
