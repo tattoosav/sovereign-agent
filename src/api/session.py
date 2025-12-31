@@ -52,7 +52,8 @@ class SessionManager:
     def _setup_tools(self, working_dir: Path) -> ToolRegistry:
         """Set up the tool registry with all available tools."""
         registry = ToolRegistry()
-        allowed_paths = [working_dir]
+        # Allow working dir and /tmp for uploaded files
+        allowed_paths = [working_dir, Path("/tmp")]
 
         registry.register(ReadFileTool(allowed_paths=allowed_paths))
         registry.register(WriteFileTool(allowed_paths=allowed_paths))

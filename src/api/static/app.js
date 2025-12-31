@@ -148,8 +148,8 @@ class SovereignAgent {
         this.sendBtn.disabled = true;
         this.setStatus('thinking', 'Thinking...');
 
-        // Use streaming for better UX
-        await this.sendMessageStreaming(message);
+        // Use non-streaming endpoint which executes tools properly
+        await this.sendMessageNonStreaming(message);
     }
 
     async sendMessageStreaming(message) {
@@ -229,6 +229,16 @@ class SovereignAgent {
     }
 
     async sendMessageNonStreaming(message, existingEl = null) {
+        // Create placeholder with loading indicator
+        const messageEl = document.createElement('div');
+        messageEl.className = 'message assistant';
+        messageEl.innerHTML = `
+            <div class="message-header">Sovereign Agent</div>
+            <div class="message-content"><span class="loading"></span> Processing (executing tools)...</div>
+        `;
+        this.messagesEl.appendChild(messageEl);
+        this.scrollToBottom();
+
         try {
             const response = await fetch('/chat', {
                 method: 'POST',
@@ -240,35 +250,40 @@ class SovereignAgent {
             });
 
             const data = await response.json();
+            const contentEl = messageEl.querySelector('.message-content');
 
-            if (existingEl) {
-                // Update existing message element
-                const contentEl = existingEl.querySelector('.message-content');
-                if (data.status === 'success') {
-                    contentEl.innerHTML = this.formatContent(data.response);
-                } else {
-                    contentEl.innerHTML = `Error: ${data.error}`;
+            if (data.status === 'success') {
+                contentEl.innerHTML = this.formatContent(data.response);
+
+                // Add tool calls display if any
+                if (data.tool_calls && data.tool_calls.length > 0) {
+                    const toolCallsHtml = `
+                        <div class="tool-calls">
+                            <strong>Tools Used (${data.tool_calls.length}):</strong>
+                            ${data.tool_calls.map(tc => `
+                                <div class="tool-call ${tc.success ? 'success' : 'failure'}">
+                                    <div class="tool-call-header">
+                                        <span class="tool-call-name">${tc.name}</span>
+                                        <span class="tool-call-status">${tc.success ? '✓' : '✗'}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    messageEl.innerHTML += toolCallsHtml;
                 }
             } else {
-                // Add new message
-                if (data.status === 'success') {
-                    this.addMessage('assistant', data.response, data.tool_calls);
-                } else {
-                    this.addMessage('assistant', `Error: ${data.error}`);
-                }
+                contentEl.innerHTML = `<span class="error">Error: ${data.error}</span>`;
             }
 
             this.setStatus('connected', 'Connected');
         } catch (error) {
             console.error('Chat error:', error);
-            if (existingEl) {
-                existingEl.querySelector('.message-content').innerHTML = 'Error: Failed to get response';
-            } else {
-                this.addMessage('assistant', 'Error: Failed to get response');
-            }
+            messageEl.querySelector('.message-content').innerHTML = '<span class="error">Error: Failed to get response</span>';
             this.setStatus('disconnected', 'Error');
         } finally {
             this.sendBtn.disabled = false;
+            this.scrollToBottom();
         }
     }
 

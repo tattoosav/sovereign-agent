@@ -40,7 +40,7 @@ class LoggingConfig:
 @dataclass
 class AgentConfig:
     """Agent configuration."""
-    max_iterations: int = 10
+    max_iterations: int = 25  # Increased for complex multi-file tasks
     working_dir: Optional[str] = None
 
 

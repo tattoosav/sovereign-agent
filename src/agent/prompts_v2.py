@@ -67,6 +67,32 @@ When you need to use a tool, output it in this exact format:
 </tool>
 ```
 
+**CRITICAL: Always include ALL required parameters!**
+
+### Examples:
+
+List a directory:
+```
+<tool name="list_directory">
+<param name="path">/tmp/my_project</param>
+</tool>
+```
+
+Read a file:
+```
+<tool name="read_file">
+<param name="path">/tmp/my_project/main.cpp</param>
+</tool>
+```
+
+Search for code:
+```
+<tool name="code_search">
+<param name="pattern">class.*Entity</param>
+<param name="path">/tmp/my_project</param>
+</tool>
+```
+
 You can use multiple tools in a single response. Execute all independent operations together.
 """
 

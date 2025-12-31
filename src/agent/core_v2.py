@@ -243,6 +243,22 @@ class AgentV2:
 
         return tool_calls
 
+    def _infer_path_from_context(self) -> str | None:
+        """Try to infer a project path from recent conversation context."""
+        # Look for paths mentioned in recent messages
+        for msg in reversed(self.history[-5:]):
+            content = msg.content
+            # Look for /tmp/sovereign_ paths (uploaded projects)
+            import re
+            match = re.search(r'/tmp/sovereign_[a-z0-9_]+', content)
+            if match:
+                return match.group(0)
+            # Look for other common project paths
+            match = re.search(r'(?:files are at|project at|uploaded to)[:\s]+([/\w_-]+)', content, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        return None
+
     def _execute_tool(self, call: ParsedToolCall) -> ToolResult:
         """Execute a single tool call with caching."""
         tool = self.tools.get(call.name)
@@ -253,6 +269,13 @@ class AgentV2:
                 output="",
                 error=f"Unknown tool: {call.name}"
             )
+
+        # Auto-fill missing path parameter for filesystem tools
+        if call.name in ["list_directory", "read_file", "code_search"] and "path" not in call.params:
+            inferred_path = self._infer_path_from_context()
+            if inferred_path:
+                call.params["path"] = inferred_path
+                logger.info(f"Auto-filled missing path parameter: {inferred_path}")
 
         # Check cache
         cached_result = self.op_cache.get(call.name, call.params)
@@ -455,8 +478,15 @@ class AgentV2:
             llm_output = response.content
             accumulated_response += llm_output
 
+            # Debug: Log raw LLM output to see what tools it's generating
+            logger.debug(f"Raw LLM output: {llm_output[:500]}...")
+
             # Parse tool calls
             tool_calls = self._parse_tool_calls(llm_output)
+
+            # Debug: Log parsed tool calls
+            for tc in tool_calls:
+                logger.info(f"Parsed tool call: {tc.name} with params: {tc.params}")
 
             if not tool_calls:
                 # No tools, task complete
