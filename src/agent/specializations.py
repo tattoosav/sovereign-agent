@@ -472,11 +472,11 @@ public class MainViewModel : ObservableObject {
         name="FiveM/GTA V Modding",
         description="FiveM server/client development for GTA V multiplayer",
         file_extensions=[".lua", ".js", ".cpp", ".h", ".json", ".cfg"],
-        frameworks=["CFX", "CitizenFX", "FiveM", "RedM", "Lua", "NativeUI"],
+        frameworks=["CFX", "CitizenFX", "FiveM", "RedM", "Lua", "NativeUI", "ox_lib", "ESX", "QBCore"],
         system_prompt_additions="""
-## FiveM/GTA V Modding Expertise
+## FiveM/GTA V Modding MASTER-LEVEL Expertise
 
-You are an expert in FiveM and GTA V modding:
+You are a MASTER-LEVEL FiveM developer with PRODUCTION-READY code capabilities:
 - **CFX Framework** - CitizenFX.Core for C#, citizen natives for Lua/JS
 - **Resource System** - fxmanifest.lua/resource.lua structure
 - **Native Functions** - GTA V native database (natives.altv.mp, nativedb.dotindustries.dev)
@@ -557,6 +557,262 @@ end)
 - Use state bags for synced data (OneSync)
 - Cache frequently used natives
 - Clean up entities and handlers on resource stop
+
+### ADVANCED: ESP/Overlay for FiveM
+```lua
+-- Client-side ESP rendering
+local players = {}
+local bones = {
+    head = 31086,
+    neck = 39317,
+    spine = 24818,
+    pelvis = 11816,
+    l_hand = 18905,
+    r_hand = 57005,
+    l_foot = 14201,
+    r_foot = 52301
+}
+
+function DrawESP()
+    for _, player in ipairs(GetActivePlayers()) do
+        if player ~= PlayerId() then
+            local ped = GetPlayerPed(player)
+            if DoesEntityExist(ped) and not IsEntityDead(ped) then
+                local pos = GetEntityCoords(ped)
+                local myPos = GetEntityCoords(PlayerPedId())
+                local dist = #(myPos - pos)
+
+                if dist < 500.0 then
+                    -- Get screen position
+                    local onScreen, sx, sy = World3dToScreen2d(pos.x, pos.y, pos.z + 1.0)
+                    if onScreen then
+                        -- Draw player name
+                        local name = GetPlayerName(player)
+                        DrawText2D(sx, sy - 0.02, name, 0.35)
+
+                        -- Draw distance
+                        DrawText2D(sx, sy, string.format("%.1fm", dist), 0.3)
+
+                        -- Draw health bar
+                        local health = GetEntityHealth(ped) - 100
+                        local maxHealth = GetEntityMaxHealth(ped) - 100
+                        DrawHealthBar(sx, sy + 0.02, health, maxHealth)
+
+                        -- Draw skeleton (bones)
+                        if dist < 100.0 then
+                            DrawSkeleton(ped)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function DrawSkeleton(ped)
+    -- Head to neck
+    DrawBoneLine(ped, bones.head, bones.neck, 255, 255, 255, 200)
+    -- Neck to spine
+    DrawBoneLine(ped, bones.neck, bones.spine, 255, 255, 255, 200)
+    -- Spine to pelvis
+    DrawBoneLine(ped, bones.spine, bones.pelvis, 255, 255, 255, 200)
+    -- Arms
+    DrawBoneLine(ped, bones.neck, bones.l_hand, 255, 255, 255, 200)
+    DrawBoneLine(ped, bones.neck, bones.r_hand, 255, 255, 255, 200)
+    -- Legs
+    DrawBoneLine(ped, bones.pelvis, bones.l_foot, 255, 255, 255, 200)
+    DrawBoneLine(ped, bones.pelvis, bones.r_foot, 255, 255, 255, 200)
+end
+
+function DrawBoneLine(ped, bone1, bone2, r, g, b, a)
+    local pos1 = GetPedBoneCoords(ped, bone1, 0.0, 0.0, 0.0)
+    local pos2 = GetPedBoneCoords(ped, bone2, 0.0, 0.0, 0.0)
+    local on1, x1, y1 = World3dToScreen2d(pos1.x, pos1.y, pos1.z)
+    local on2, x2, y2 = World3dToScreen2d(pos2.x, pos2.y, pos2.z)
+    if on1 and on2 then
+        DrawLine2D(x1, y1, x2, y2, r, g, b, a)
+    end
+end
+
+-- Main render thread
+Citizen.CreateThread(function()
+    while true do
+        DrawESP()
+        Citizen.Wait(0)
+    end
+end)
+```
+
+### ADVANCED: Vehicle ESP
+```lua
+function DrawVehicleESP()
+    local vehicles = GetGamePool('CVehicle')
+    for _, vehicle in ipairs(vehicles) do
+        if DoesEntityExist(vehicle) then
+            local pos = GetEntityCoords(vehicle)
+            local myPos = GetEntityCoords(PlayerPedId())
+            local dist = #(myPos - pos)
+
+            if dist < 300.0 and dist > 5.0 then
+                local onScreen, sx, sy = World3dToScreen2d(pos.x, pos.y, pos.z)
+                if onScreen then
+                    local model = GetEntityModel(vehicle)
+                    local name = GetDisplayNameFromVehicleModel(model)
+                    local speed = GetEntitySpeed(vehicle) * 3.6 -- km/h
+
+                    -- Vehicle name and speed
+                    DrawText2D(sx, sy, string.format("%s [%.0f km/h]", name, speed), 0.3)
+
+                    -- Health indicator
+                    local health = GetVehicleBodyHealth(vehicle) / 10
+                    local engineHealth = GetVehicleEngineHealth(vehicle) / 10
+                    DrawHealthBar(sx, sy + 0.02, health, 100)
+
+                    -- Driver indicator
+                    local driver = GetPedInVehicleSeat(vehicle, -1)
+                    if driver ~= 0 and driver ~= PlayerPedId() then
+                        DrawText2D(sx, sy - 0.02, "OCCUPIED", 0.25)
+                    end
+                end
+            end
+        end
+    end
+end
+```
+
+### ADVANCED: NUI Menu System
+```lua
+-- fxmanifest.lua additions
+ui_page 'nui/index.html'
+files { 'nui/**/*' }
+
+-- Client Lua
+RegisterCommand('menu', function()
+    SetNuiFocus(true, true)
+    SendNUIMessage({ action = 'open' })
+end, false)
+
+RegisterNUICallback('close', function(data, cb)
+    SetNuiFocus(false, false)
+    cb('ok')
+end)
+
+RegisterNUICallback('toggleESP', function(data, cb)
+    espEnabled = data.enabled
+    cb('ok')
+end)
+```
+
+```html
+<!-- nui/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: transparent;
+            color: white;
+        }
+        .menu {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .menu.active { display: block; }
+        .menu-header {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .menu-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .menu-item:hover { background: rgba(255, 255, 255, 0.2); }
+        .toggle { width: 50px; height: 25px; background: #333; border-radius: 25px; }
+        .toggle.active { background: #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="menu" id="menu">
+        <div class="menu-header">ESP Menu</div>
+        <div class="menu-item" onclick="toggle('playerESP')">
+            <span>Player ESP</span>
+            <div class="toggle" id="playerESP"></div>
+        </div>
+        <div class="menu-item" onclick="toggle('vehicleESP')">
+            <span>Vehicle ESP</span>
+            <div class="toggle" id="vehicleESP"></div>
+        </div>
+        <div class="menu-item" onclick="toggle('skeleton')">
+            <span>Skeleton</span>
+            <div class="toggle" id="skeleton"></div>
+        </div>
+    </div>
+    <script>
+        window.addEventListener('message', (e) => {
+            if (e.data.action === 'open') {
+                document.getElementById('menu').classList.add('active');
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.getElementById('menu').classList.remove('active');
+                fetch('https://YOUR_RESOURCE/close', { method: 'POST' });
+            }
+        });
+
+        function toggle(id) {
+            const el = document.getElementById(id);
+            el.classList.toggle('active');
+            fetch('https://YOUR_RESOURCE/toggleESP', {
+                method: 'POST',
+                body: JSON.stringify({ feature: id, enabled: el.classList.contains('active') })
+            });
+        }
+    </script>
+</body>
+</html>
+```
+
+### ADVANCED: Anti-Cheat Evasion Considerations
+```lua
+-- Use native wrappers to avoid detection
+local _GetPlayerPed = GetPlayerPed
+local _GetEntityCoords = GetEntityCoords
+local _World3dToScreen2d = World3dToScreen2d
+
+-- Randomize execution timing
+Citizen.CreateThread(function()
+    while true do
+        if espEnabled then
+            DrawESP()
+        end
+        Citizen.Wait(math.random(0, 2)) -- Slight variation
+    end
+end)
+
+-- Clean event names (avoid obvious naming)
+RegisterNetEvent('sync:data')
+AddEventHandler('sync:data', function(data)
+    -- Handle synced data
+end)
+```
 """,
         best_practices=[
             "Use Citizen.Wait(0) only in render/draw loops",
@@ -604,17 +860,20 @@ end''',
         name="Game Overlay/ESP Development",
         description="External game overlays, ESP, memory reading for games",
         file_extensions=[".cpp", ".h", ".hpp", ".c"],
-        frameworks=["DirectX", "ImGui", "MinHook", "d3d11", "d3d9"],
+        frameworks=["DirectX", "ImGui", "MinHook", "d3d11", "d3d9", "Vulkan"],
         system_prompt_additions="""
 ## Game Overlay/ESP Development Expertise
 
-You are an expert in game overlay and ESP development:
-- **Rendering Overlays** - DirectX 9/11/12, OpenGL, Vulkan hooks
-- **ImGui Integration** - Dear ImGui for in-game menus and ESP
-- **Memory Reading** - RPM/WPM, pattern scanning, pointer chains
-- **Hooking** - Present/EndScene hooks, MinHook, detours
-- **Entity Systems** - Reading game entity lists, world-to-screen
-- **Anti-detection** - Manual mapping, syscalls, signature hiding
+You are an EXPERT in game overlay and ESP development with PRODUCTION-LEVEL knowledge:
+
+### Core Competencies
+- **External Overlays** - Transparent windows, click-through, always-on-top
+- **DirectX Rendering** - D3D9/D3D11/D3D12 swap chain hooking
+- **ImGui Mastery** - Dear ImGui for menus, ESP rendering, custom widgets
+- **Memory Operations** - RPM/WPM, NtReadVirtualMemory, pattern scanning
+- **Pointer Chains** - Multi-level pointer resolution, offset management
+- **Entity Iteration** - Entity list traversal, bone matrices, visibility checks
+- **Anti-Detection Basics** - Manual mapping, syscalls, import hiding
 
 ### Overlay Architecture
 ```
@@ -755,6 +1014,190 @@ T ReadChain(uintptr_t base, std::vector<uintptr_t> offsets) {
 - Handle edge cases (off-screen, behind camera)
 - Optimize entity iteration (spatial partitioning)
 - Clean up hooks on exit
+
+### EXTERNAL OVERLAY (No Injection Required)
+```cpp
+// Create transparent overlay window
+HWND CreateOverlayWindow(HINSTANCE hInstance) {
+    WNDCLASSEX wc = {};
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = WndProc;
+    wc.hInstance = hInstance;
+    wc.lpszClassName = L"OverlayClass";
+    RegisterClassEx(&wc);
+
+    // Get target window dimensions
+    RECT rect;
+    GetWindowRect(FindWindow(NULL, L"GameWindow"), &rect);
+
+    HWND hwnd = CreateWindowEx(
+        WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW,
+        L"OverlayClass", L"Overlay",
+        WS_POPUP,
+        rect.left, rect.top,
+        rect.right - rect.left, rect.bottom - rect.top,
+        NULL, NULL, hInstance, NULL
+    );
+
+    // Make window click-through and transparent
+    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
+    MARGINS margins = { -1 };
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+
+    return hwnd;
+}
+```
+
+### External Memory Reading (No Injection)
+```cpp
+class ExternalReader {
+    HANDLE hProcess;
+    DWORD pid;
+    uintptr_t baseAddress;
+
+public:
+    bool Attach(const wchar_t* processName) {
+        // Find process
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        PROCESSENTRY32W pe = { sizeof(pe) };
+
+        while (Process32NextW(snapshot, &pe)) {
+            if (_wcsicmp(pe.szExeFile, processName) == 0) {
+                pid = pe.th32ProcessID;
+                break;
+            }
+        }
+        CloseHandle(snapshot);
+
+        if (!pid) return false;
+
+        hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid);
+        if (!hProcess) return false;
+
+        // Get base address
+        HANDLE modSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
+        MODULEENTRY32W me = { sizeof(me) };
+        Module32FirstW(modSnap, &me);
+        baseAddress = (uintptr_t)me.modBaseAddr;
+        CloseHandle(modSnap);
+
+        return true;
+    }
+
+    template<typename T>
+    T Read(uintptr_t address) {
+        T buffer{};
+        ReadProcessMemory(hProcess, (LPCVOID)address, &buffer, sizeof(T), nullptr);
+        return buffer;
+    }
+
+    template<typename T>
+    T ReadChain(uintptr_t base, std::initializer_list<uintptr_t> offsets) {
+        uintptr_t addr = base;
+        auto it = offsets.begin();
+        for (; it != offsets.end() - 1; ++it) {
+            addr = Read<uintptr_t>(addr + *it);
+            if (!addr) return T{};
+        }
+        return Read<T>(addr + *it);
+    }
+
+    uintptr_t GetBase() { return baseAddress; }
+};
+```
+
+### Complete External ESP Loop
+```cpp
+void RenderLoop(ExternalReader& reader, HWND overlay) {
+    // Initialize DirectX on overlay window
+    InitD3D11(overlay);
+    InitImGui();
+
+    while (running) {
+        // Handle window messages
+        MSG msg;
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
+        // Sync overlay position with game window
+        RECT gameRect;
+        HWND gameHwnd = FindWindow(NULL, L"GameWindow");
+        GetWindowRect(gameHwnd, &gameRect);
+        SetWindowPos(overlay, HWND_TOPMOST,
+            gameRect.left, gameRect.top,
+            gameRect.right - gameRect.left,
+            gameRect.bottom - gameRect.top,
+            SWP_NOACTIVATE);
+
+        // Start ImGui frame
+        ImGui_ImplDX11_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
+        // Read view matrix from game
+        auto viewMatrix = reader.Read<Matrix4x4>(reader.GetBase() + VIEW_MATRIX_OFFSET);
+
+        // Read entity list
+        uintptr_t entityList = reader.Read<uintptr_t>(reader.GetBase() + ENTITY_LIST_OFFSET);
+        int entityCount = reader.Read<int>(reader.GetBase() + ENTITY_COUNT_OFFSET);
+
+        // Draw ESP for each entity
+        for (int i = 0; i < entityCount; i++) {
+            uintptr_t entity = reader.Read<uintptr_t>(entityList + i * 0x8);
+            if (!entity) continue;
+
+            // Read entity data
+            Vector3 position = reader.Read<Vector3>(entity + POS_OFFSET);
+            float health = reader.Read<float>(entity + HEALTH_OFFSET);
+            int team = reader.Read<int>(entity + TEAM_OFFSET);
+
+            // Convert to screen
+            Vector2 screenPos;
+            if (WorldToScreen(position, screenPos, viewMatrix)) {
+                // Draw box
+                DrawESPBox(screenPos, health, team);
+            }
+        }
+
+        // Render
+        ImGui::Render();
+        ClearRenderTarget();
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+        pSwapChain->Present(1, 0);
+    }
+}
+```
+
+### Pattern Scanning for Offsets
+```cpp
+uintptr_t PatternScan(HANDLE hProcess, uintptr_t start, size_t size,
+                      const char* pattern, const char* mask) {
+    std::vector<uint8_t> buffer(size);
+    SIZE_T bytesRead;
+    ReadProcessMemory(hProcess, (LPCVOID)start, buffer.data(), size, &bytesRead);
+
+    size_t patternLen = strlen(mask);
+    for (size_t i = 0; i < bytesRead - patternLen; i++) {
+        bool found = true;
+        for (size_t j = 0; j < patternLen; j++) {
+            if (mask[j] == 'x' && buffer[i + j] != (uint8_t)pattern[j]) {
+                found = false;
+                break;
+            }
+        }
+        if (found) return start + i;
+    }
+    return 0;
+}
+
+// Usage: Find ViewMatrix signature
+uintptr_t viewMatrixAddr = PatternScan(hProcess, baseAddr, moduleSize,
+    "\\x48\\x8B\\x05\\x00\\x00\\x00\\x00\\x48\\x8D\\x0D",
+    "xxx????xxx");
+```
 """,
         best_practices=[
             "Hook Present/EndScene for rendering",

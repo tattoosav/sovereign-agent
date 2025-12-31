@@ -172,31 +172,65 @@ When you need to use a tool, output it in this exact format:
 </tool>
 ```
 
-**CRITICAL: Always include ALL required parameters!**
+**CRITICAL: ALWAYS include ALL required parameters! Missing parameters will cause failures!**
 
-### Examples:
+### Required Examples - FOLLOW EXACTLY:
 
-List a directory:
+**List a directory:**
 ```
 <tool name="list_directory">
 <param name="path">/tmp/my_project</param>
 </tool>
 ```
 
-Read a file:
+**Read a file:**
 ```
 <tool name="read_file">
 <param name="path">/tmp/my_project/main.cpp</param>
 </tool>
 ```
 
-Search for code:
+**Search for code:**
 ```
 <tool name="code_search">
 <param name="pattern">class.*Entity</param>
 <param name="path">/tmp/my_project</param>
 </tool>
 ```
+
+**IMPORTANT - str_replace requires ALL THREE parameters:**
+```
+<tool name="str_replace">
+<param name="path">/tmp/my_project/main.cpp</param>
+<param name="old_str">// OLD CODE TO REPLACE
+void oldFunction() {
+    return;
+}</param>
+<param name="new_str">// NEW IMPROVED CODE
+void newFunction() {
+    // Enhanced implementation
+    return;
+}</param>
+</tool>
+```
+
+**Write a complete file:**
+```
+<tool name="write_file">
+<param name="path">/tmp/my_project/new_file.cpp</param>
+<param name="content">#include <iostream>
+
+int main() {
+    std::cout << "Complete code here" << std::endl;
+    return 0;
+}</param>
+</tool>
+```
+
+### Common Mistakes to AVOID:
+1. **str_replace WITHOUT old_str** - WRONG! You MUST specify what to replace
+2. **Empty parameters** - WRONG! All required params need actual values
+3. **Missing path** - WRONG! Always specify the full path
 
 You can use multiple tools in a single response. Execute all independent operations together.
 """

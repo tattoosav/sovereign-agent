@@ -270,6 +270,37 @@ class AgentV2:
         logger.warning("Could not infer path from context")
         return None
 
+    def _validate_tool_call(self, call: ParsedToolCall) -> tuple[bool, str]:
+        """
+        Validate a tool call before execution.
+
+        Returns:
+            (is_valid, error_message) tuple
+        """
+        tool = self.tools.get(call.name)
+        if tool is None:
+            return False, f"Unknown tool: {call.name}"
+
+        # Check required parameters
+        missing_params = []
+        for param_name, param_info in tool.parameters.items():
+            if param_info.get("required", False):
+                if param_name not in call.params or not call.params[param_name]:
+                    missing_params.append(param_name)
+
+        if missing_params:
+            param_list = ", ".join(missing_params)
+            # Provide specific guidance for common tools
+            guidance = ""
+            if call.name == "str_replace":
+                guidance = "\n\nFor str_replace, you MUST provide:\n- path: file to edit\n- old_str: exact text to find (copy from read_file output)\n- new_str: replacement text"
+            elif call.name == "write_file":
+                guidance = "\n\nFor write_file, you MUST provide:\n- path: file to create/overwrite\n- content: complete file contents"
+
+            return False, f"Missing required parameters: {param_list}{guidance}"
+
+        return True, ""
+
     def _execute_tool(self, call: ParsedToolCall) -> ToolResult:
         """Execute a single tool call with caching."""
         tool = self.tools.get(call.name)
@@ -279,6 +310,16 @@ class AgentV2:
                 success=False,
                 output="",
                 error=f"Unknown tool: {call.name}"
+            )
+
+        # Validate tool call before execution
+        is_valid, validation_error = self._validate_tool_call(call)
+        if not is_valid:
+            logger.warning(f"Invalid tool call {call.name}: {validation_error}")
+            return ToolResult(
+                success=False,
+                output="",
+                error=validation_error
             )
 
         # Auto-fill missing path parameter for filesystem tools

@@ -123,7 +123,7 @@ class PatternLearner:
         stats = {"files_analyzed": 0, "patterns_found": 0, "new_patterns": 0}
 
         pattern = "**/*" if recursive else "*"
-        extensions = {".py", ".cpp", ".c", ".h", ".hpp", ".cs"}
+        extensions = {".py", ".cpp", ".c", ".h", ".hpp", ".cs", ".lua", ".js"}
 
         for file_path in directory.glob(pattern):
             if file_path.is_file() and file_path.suffix in extensions:
@@ -165,6 +165,10 @@ class PatternLearner:
             result = self._learn_cpp_patterns(content, str(file_path))
         elif language == "csharp":
             result = self._learn_csharp_patterns(content, str(file_path))
+        elif language == "lua":
+            result = self._learn_lua_patterns(content, str(file_path))
+        elif language == "javascript":
+            result = self._learn_javascript_patterns(content, str(file_path))
         else:
             return stats
 
@@ -184,6 +188,10 @@ class PatternLearner:
             return "c"
         elif ext == ".cs":
             return "csharp"
+        elif ext == ".lua":
+            return "lua"
+        elif ext == ".js":
+            return "javascript"
         return "unknown"
 
     def _learn_python_patterns(self, content: str, file_path: str) -> dict[str, int]:
@@ -494,6 +502,131 @@ class PatternLearner:
         if ".Where(" in content or ".Select(" in content:
             self._add_pattern("uses_linq", "style", "csharp",
                               "Uses LINQ for queries", "", file_path)
+
+        return stats
+
+    def _learn_lua_patterns(self, content: str, file_path: str) -> dict[str, int]:
+        """Learn patterns from Lua code (especially FiveM)."""
+        stats = {"found": 0, "new": 0}
+
+        # FiveM/CFX specific patterns
+        if "Citizen.CreateThread" in content:
+            self._add_pattern("citizen_threads", "fivem", "lua",
+                              "Uses Citizen.CreateThread for loops", "", file_path)
+
+        if "Citizen.Wait" in content:
+            self._add_pattern("citizen_wait", "fivem", "lua",
+                              "Uses Citizen.Wait for delays", "", file_path)
+
+        if "RegisterNetEvent" in content:
+            self._add_pattern("net_events", "fivem", "lua",
+                              "Uses RegisterNetEvent for networking", "", file_path)
+
+        if "TriggerServerEvent" in content or "TriggerClientEvent" in content:
+            self._add_pattern("trigger_events", "fivem", "lua",
+                              "Uses Trigger*Event for communication", "", file_path)
+
+        if "AddEventHandler" in content:
+            self._add_pattern("event_handlers", "fivem", "lua",
+                              "Uses AddEventHandler for events", "", file_path)
+
+        # ESP/Drawing patterns
+        if "World3dToScreen2d" in content:
+            self._add_pattern("world_to_screen", "esp", "lua",
+                              "Uses World3dToScreen2d for ESP", "", file_path)
+
+        if "DrawText" in content or "SetTextFont" in content:
+            self._add_pattern("draw_text", "rendering", "lua",
+                              "Uses native text drawing", "", file_path)
+
+        if "DrawRect" in content:
+            self._add_pattern("draw_rect", "rendering", "lua",
+                              "Uses DrawRect for boxes/bars", "", file_path)
+
+        if "GetPedBoneCoords" in content:
+            self._add_pattern("bone_coords", "esp", "lua",
+                              "Uses GetPedBoneCoords for skeleton ESP", "", file_path)
+
+        if "GetActivePlayers" in content:
+            self._add_pattern("player_iteration", "esp", "lua",
+                              "Uses GetActivePlayers for player ESP", "", file_path)
+
+        if "GetGamePool" in content:
+            self._add_pattern("game_pool", "esp", "lua",
+                              "Uses GetGamePool for entity lists", "", file_path)
+
+        # NUI patterns
+        if "SendNUIMessage" in content:
+            self._add_pattern("nui_messages", "nui", "lua",
+                              "Uses SendNUIMessage for UI", "", file_path)
+
+        if "RegisterNUICallback" in content:
+            self._add_pattern("nui_callbacks", "nui", "lua",
+                              "Uses RegisterNUICallback for UI events", "", file_path)
+
+        if "SetNuiFocus" in content:
+            self._add_pattern("nui_focus", "nui", "lua",
+                              "Uses SetNuiFocus for input control", "", file_path)
+
+        # Common patterns
+        if "local function" in content:
+            self._add_pattern("local_functions", "structure", "lua",
+                              "Uses local function declarations", "", file_path)
+
+        if "exports[" in content or "exports." in content:
+            self._add_pattern("exports", "fivem", "lua",
+                              "Uses exports for cross-resource calls", "", file_path)
+
+        # Error handling
+        if "pcall" in content:
+            self._add_pattern("pcall", "error_handling", "lua",
+                              "Uses pcall for protected calls", "", file_path)
+
+        return stats
+
+    def _learn_javascript_patterns(self, content: str, file_path: str) -> dict[str, int]:
+        """Learn patterns from JavaScript code (NUI/web)."""
+        stats = {"found": 0, "new": 0}
+
+        # FiveM NUI patterns
+        if "window.addEventListener('message'" in content:
+            self._add_pattern("nui_message_listener", "nui", "javascript",
+                              "Listens for NUI messages from Lua", "", file_path)
+
+        if "fetch('https://" in content and "nui-" in file_path.lower():
+            self._add_pattern("nui_callbacks", "nui", "javascript",
+                              "Uses fetch for NUI callbacks", "", file_path)
+
+        # Modern JS patterns
+        if "async " in content or "await " in content:
+            self._add_pattern("async_await", "async", "javascript",
+                              "Uses async/await pattern", "", file_path)
+
+        if "=>" in content:
+            self._add_pattern("arrow_functions", "style", "javascript",
+                              "Uses arrow functions", "", file_path)
+
+        if "const " in content:
+            self._add_pattern("const_declarations", "style", "javascript",
+                              "Uses const for constants", "", file_path)
+
+        if "let " in content:
+            self._add_pattern("let_declarations", "style", "javascript",
+                              "Uses let for variables", "", file_path)
+
+        # DOM patterns
+        if "document.getElementById" in content or "document.querySelector" in content:
+            self._add_pattern("dom_queries", "dom", "javascript",
+                              "Uses DOM query methods", "", file_path)
+
+        if "classList" in content:
+            self._add_pattern("classlist", "dom", "javascript",
+                              "Uses classList for styling", "", file_path)
+
+        # Event handling
+        if "addEventListener" in content:
+            self._add_pattern("event_listeners", "events", "javascript",
+                              "Uses addEventListener", "", file_path)
 
         return stats
 
