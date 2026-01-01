@@ -757,50 +757,60 @@ BEGIN IMPLEMENTATION:"""
             for tc in tool_calls:
                 logger.info(f"Parsed tool call: {tc.name} with params: {tc.params}")
 
-            # Loop detection - check if we're repeating the EXACT same tool calls
-            # Be more lenient for implementation tasks where repeating tools is normal
+            # Loop detection - DISABLED for write_file (writing different files is not a loop)
+            # Only detect loops on read_file/list_directory with exact same params
             if tool_calls:
-                current_call_sig = "|".join(f"{tc.name}:{sorted(tc.params.items())}" for tc in tool_calls)
-                self._recent_tool_calls.append(current_call_sig)
+                # Don't count write_file as potential loops - each write is productive
+                non_write_calls = [tc for tc in tool_calls if tc.name not in ["write_file", "str_replace"]]
 
-                # Only detect loops for non-implementation tasks, and require 4+ exact same calls
-                is_implementation = self._current_task_type in [TaskType.IMPLEMENT, TaskType.REFACTOR]
-                loop_threshold = 5 if is_implementation else 4
+                if non_write_calls:
+                    current_call_sig = "|".join(f"{tc.name}:{sorted(tc.params.items())}" for tc in non_write_calls)
+                    self._recent_tool_calls.append(current_call_sig)
 
-                if len(self._recent_tool_calls) >= loop_threshold:
-                    recent = self._recent_tool_calls[-8:]  # Look at more history
-                    if recent.count(current_call_sig) >= loop_threshold:
-                        logger.warning(f"Loop detected: {tool_calls[0].name} called {loop_threshold}+ times")
-                        self.console.print(f"[yellow]Loop detected - injecting guidance[/yellow]")
+                    # Only detect loops on read operations, require 6+ exact same calls
+                    loop_threshold = 6
 
-                        # Instead of stopping, inject guidance to break the loop
-                        loop_break_guidance = """
-LOOP DETECTED - You've repeated the same action multiple times.
+                    if len(self._recent_tool_calls) >= loop_threshold:
+                        recent = self._recent_tool_calls[-10:]
+                        if recent.count(current_call_sig) >= loop_threshold:
+                            logger.warning(f"Loop detected: {non_write_calls[0].name} called {loop_threshold}+ times")
+                            self.console.print(f"[yellow]Loop detected on read operations[/yellow]")
 
-REQUIRED: Take a DIFFERENT approach now:
-1. If reading files failed, try a different path or list the directory first
-2. If searching found nothing, try broader patterns or read files directly
-3. If listing directories repeatedly, STOP and work with files you've already found
+                            # Force complete if we've written files
+                            if len(self._files_written) >= 1:
+                                self.console.print(f"[green]Completing with {len(self._files_written)} files written[/green]")
+                                self.history.append(Message(role="assistant", content=accumulated_response))
+                                return TurnResult(
+                                    response=accumulated_response + f"\n\nCompleted with {len(self._files_written)} files written.",
+                                    tool_calls=self._turn_tool_calls,
+                                    model_used=model_used,
+                                    task_type=self._current_task_type,
+                                    tokens_used=total_tokens,
+                                    iterations=iteration,
+                                )
 
-DO NOT repeat the last action. Try something NEW."""
+                            # No files written - inject guidance
+                            loop_break_guidance = """
+LOOP DETECTED on read operations. Take a DIFFERENT approach:
+1. If file not found, list the directory first
+2. If search found nothing, try broader patterns
+3. Start WRITING code instead of searching
 
-                        accumulated_response += f"\n\n{loop_break_guidance}"
-                        self._recent_tool_calls = []  # Reset to give it another chance
+DO NOT repeat the last action."""
 
-                        # Only force stop after injecting guidance twice
-                        if hasattr(self, '_loop_breaks') and self._loop_breaks >= 2:
-                            self.history.append(Message(role="assistant", content=accumulated_response))
-                            return TurnResult(
-                                response=accumulated_response + "\n\n[Warning: Multiple loops detected, completing with available results]",
-                                tool_calls=self._turn_tool_calls,
-                                model_used=model_used,
-                                task_type=self._current_task_type,
-                                tokens_used=total_tokens,
-                                iterations=iteration,
-                            )
-                        if not hasattr(self, '_loop_breaks'):
-                            self._loop_breaks = 0
-                        self._loop_breaks += 1
+                            accumulated_response += f"\n\n{loop_break_guidance}"
+                            self._recent_tool_calls = []
+                            self._loop_breaks += 1
+
+                            if self._loop_breaks >= 2:
+                                return TurnResult(
+                                    response="Loop detected. Please try a more specific request.",
+                                    tool_calls=self._turn_tool_calls,
+                                    model_used=model_used,
+                                    task_type=self._current_task_type,
+                                    tokens_used=total_tokens,
+                                    iterations=iteration,
+                                )
 
             # Check for unproductive exploration (many empty searches)
             if self._empty_search_count >= 4:
