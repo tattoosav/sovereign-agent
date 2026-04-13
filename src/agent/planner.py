@@ -128,7 +128,6 @@ class TaskPlanner:
     PROJECT_KEYWORDS = [
         "create a project", "build a", "develop a", "implement a full",
         "turn it into", "transform into", "convert to",
-        "loader", "injector", "bypass", "overlay system",
         "complete application", "full system", "entire project",
     ]
 
@@ -294,12 +293,11 @@ class TaskPlanner:
         """
         Create a comprehensive project plan for complex tasks.
 
-        For project-level tasks like "turn this into a loader with overlay",
-        creates a multi-phase plan with proper dependencies.
+        Create a multi-phase plan with proper dependencies.
 
         Args:
             request: The user's request
-            project_type: Type of project (game_mod, overlay, loader, etc.)
+            project_type: Type of project
             llm_client: Optional LLM client for intelligent decomposition
 
         Returns:
@@ -310,11 +308,11 @@ class TaskPlanner:
         task_id = 1
 
         # Determine project components from request
-        has_loader = any(k in request_lower for k in ["loader", "injector", "bypass"])
-        has_overlay = any(k in request_lower for k in ["overlay", "menu", "gui", "ui"])
-        has_cleaning = any(k in request_lower for k in ["clean", "trace", "string", "anti-detection"])
-        has_injection = any(k in request_lower for k in ["inject", "dll", "hook"])
+        has_api = any(k in request_lower for k in ["api", "endpoint", "rest", "server", "backend"])
+        has_ui = any(k in request_lower for k in ["ui", "frontend", "gui", "menu", "dashboard"])
+        has_db = any(k in request_lower for k in ["database", "storage", "persist", "sqlite", "postgres"])
         has_config = any(k in request_lower for k in ["config", "settings", "options"])
+        has_auth = any(k in request_lower for k in ["auth", "login", "user", "permission"])
 
         # Phase 1: Analysis and Planning
         tasks.append(Task(
@@ -334,37 +332,46 @@ class TaskPlanner:
         task_id += 1
 
         # Phase 2: Core Infrastructure
-        if has_loader:
-            tasks.append(Task(
-                id=f"task_{task_id}",
-                description="Phase 2: Implement loader/executor core with process handling",
-                status=TaskStatus.PENDING,
-                dependencies=[f"task_{task_id - 1}"]
-            ))
-            task_id += 1
+        tasks.append(Task(
+            id=f"task_{task_id}",
+            description="Phase 2: Implement core application logic",
+            status=TaskStatus.PENDING,
+            dependencies=[f"task_{task_id - 1}"]
+        ))
+        task_id += 1
 
-        if has_injection:
+        if has_db:
             tasks.append(Task(
                 id=f"task_{task_id}",
-                description="Phase 2: Implement injection mechanism (DLL injection, memory writing)",
+                description="Phase 2: Set up database models and data layer",
                 status=TaskStatus.PENDING,
                 dependencies=[f"task_{task_id - 1}"]
             ))
             task_id += 1
 
         # Phase 3: Features
-        if has_overlay:
+        if has_api:
             tasks.append(Task(
                 id=f"task_{task_id}",
-                description="Phase 3: Create overlay window and rendering system",
+                description="Phase 3: Implement API endpoints and request handling",
                 status=TaskStatus.PENDING,
                 dependencies=[f"task_{task_id - 1}"]
             ))
             task_id += 1
 
+        if has_ui:
             tasks.append(Task(
                 id=f"task_{task_id}",
-                description="Phase 3: Implement in-game menu and configuration UI",
+                description="Phase 3: Create UI components and frontend",
+                status=TaskStatus.PENDING,
+                dependencies=[f"task_{task_id - 1}"]
+            ))
+            task_id += 1
+
+        if has_auth:
+            tasks.append(Task(
+                id=f"task_{task_id}",
+                description="Phase 3: Implement authentication and authorization",
                 status=TaskStatus.PENDING,
                 dependencies=[f"task_{task_id - 1}"]
             ))
@@ -373,34 +380,16 @@ class TaskPlanner:
         if has_config:
             tasks.append(Task(
                 id=f"task_{task_id}",
-                description="Phase 3: Implement configuration system (save/load settings)",
+                description="Phase 3: Implement configuration system",
                 status=TaskStatus.PENDING,
                 dependencies=[f"task_{task_id - 1}"]
             ))
             task_id += 1
 
-        # Phase 4: Security/Cleaning
-        if has_cleaning:
-            tasks.append(Task(
-                id=f"task_{task_id}",
-                description="Phase 4: Implement trace cleaning (memory, registry, logs)",
-                status=TaskStatus.PENDING,
-                dependencies=[f"task_{task_id - 1}"]
-            ))
-            task_id += 1
-
-            tasks.append(Task(
-                id=f"task_{task_id}",
-                description="Phase 4: Add string obfuscation and anti-detection measures",
-                status=TaskStatus.PENDING,
-                dependencies=[f"task_{task_id - 1}"]
-            ))
-            task_id += 1
-
-        # Phase 5: Integration and Testing
+        # Phase 4: Integration and Testing
         tasks.append(Task(
             id=f"task_{task_id}",
-            description="Phase 5: Integrate all components and test end-to-end",
+            description="Phase 4: Integrate all components and test end-to-end",
             status=TaskStatus.PENDING,
             dependencies=[f"task_{task_id - 1}"]
         ))
@@ -408,7 +397,7 @@ class TaskPlanner:
 
         tasks.append(Task(
             id=f"task_{task_id}",
-            description="Phase 5: Create build system and documentation",
+            description="Phase 4: Create build system and documentation",
             status=TaskStatus.PENDING,
             dependencies=[f"task_{task_id - 1}"]
         ))

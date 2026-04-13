@@ -20,6 +20,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from src.agent import AgentV2, AgentConfigV2
+from src.agent.router import ModelRouter
 from src.core import load_config, setup_logging
 from src.memory import KnowledgeBase, VectorStore
 from src.tools import (
@@ -131,15 +132,24 @@ def main() -> None:
     kb_stats = knowledge_base.get_stats()
     console.print(f"[dim]Knowledge base: {kb_stats['total_entries']} entries[/dim]")
 
+    # Configure model router from config
+    ModelRouter.configure(
+        small=config.llm.models.small,
+        medium=config.llm.models.medium,
+        large=config.llm.models.large,
+        base_url=config.llm.base_url,
+    )
+
     # Create v2 agent config
     agent_config = AgentConfigV2(
         model=config.llm.model,
-        ollama_url=config.llm.ollama_url,
+        ollama_url=config.llm.base_url,
         max_iterations=config.agent.max_iterations,
         temperature=config.llm.temperature,
         max_retries=config.llm.max_retries,
         retry_delay=config.llm.retry_delay,
-        # v2 features enabled
+        timeout=config.llm.timeout,
+        context_window=config.llm.context_window,
         enable_routing=True,
         enable_rag=True,
         enable_planning=True,

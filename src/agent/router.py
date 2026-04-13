@@ -37,56 +37,63 @@ class ModelRouter:
     Checks model availability and falls back gracefully.
     """
 
-    # Default model registry (can be overridden by available models)
-    # All models use 32K context for complex code generation
+    # Default model registry — overridden at startup via configure()
     MODELS = {
         ModelSize.SMALL: ModelConfig(
             size=ModelSize.SMALL,
             name="qwen2.5-coder:7b",
-            max_tokens=8192,  # 8K for small model
-            use_cases=[
-                "explain code",
-                "format code",
-                "simple edits",
-                "documentation",
-                "code review comments"
-            ]
+            max_tokens=8192,
+            use_cases=["explain", "format", "simple edits", "docs"]
         ),
         ModelSize.MEDIUM: ModelConfig(
             size=ModelSize.MEDIUM,
             name="qwen2.5-coder:14b",
-            max_tokens=16384,  # 16K for full file generation
-            use_cases=[
-                "implement features",
-                "debug issues",
-                "refactor code",
-                "write tests",
-                "most coding tasks"
-            ]
+            max_tokens=16384,
+            use_cases=["implement", "debug", "refactor", "tests"]
         ),
         ModelSize.LARGE: ModelConfig(
             size=ModelSize.LARGE,
             name="qwen2.5-coder:32b",
-            max_tokens=16384,  # 16K for complex multi-file tasks
-            use_cases=[
-                "architecture design",
-                "multi-file refactoring",
-                "complex debugging",
-                "system design",
-                "advanced algorithms"
-            ]
+            max_tokens=16384,
+            use_cases=["architecture", "multi-file", "complex"]
         )
     }
 
-    # Cache of available models (populated on first check)
     _available_models: set[str] | None = None
     _ollama_url: str = "http://localhost:11434"
+
+    @classmethod
+    def configure(cls, small: str | None = None, medium: str | None = None,
+                  large: str | None = None, base_url: str | None = None) -> None:
+        """
+        Configure model names and URL from config.yaml values.
+
+        Call this at startup to override the hardcoded defaults.
+        """
+        if base_url:
+            cls._ollama_url = base_url
+            cls._available_models = None
+        if small:
+            cls.MODELS[ModelSize.SMALL] = ModelConfig(
+                size=ModelSize.SMALL, name=small, max_tokens=8192,
+                use_cases=cls.MODELS[ModelSize.SMALL].use_cases)
+        if medium:
+            cls.MODELS[ModelSize.MEDIUM] = ModelConfig(
+                size=ModelSize.MEDIUM, name=medium, max_tokens=16384,
+                use_cases=cls.MODELS[ModelSize.MEDIUM].use_cases)
+        if large:
+            cls.MODELS[ModelSize.LARGE] = ModelConfig(
+                size=ModelSize.LARGE, name=large, max_tokens=16384,
+                use_cases=cls.MODELS[ModelSize.LARGE].use_cases)
+        logger.info(f"Router configured: small={cls.MODELS[ModelSize.SMALL].name}, "
+                     f"medium={cls.MODELS[ModelSize.MEDIUM].name}, "
+                     f"large={cls.MODELS[ModelSize.LARGE].name}")
 
     @classmethod
     def set_ollama_url(cls, url: str) -> None:
         """Set the Ollama URL for model availability checks."""
         cls._ollama_url = url
-        cls._available_models = None  # Reset cache
+        cls._available_models = None
 
     @classmethod
     def get_available_models(cls) -> set[str]:
@@ -140,8 +147,14 @@ class ModelRouter:
         # If no configured models available, use ANY available model
         available = cls.get_available_models()
         if available:
-            # Prefer larger models for better quality
-            for model in sorted(available, key=lambda x: '33b' in x or '70b' in x, reverse=True):
+            # Prefer larger models — extract size number from name for sorting
+            import re as _re
+
+            def _model_size_key(name: str) -> int:
+                match = _re.search(r'(\d+)[bB]', name)
+                return int(match.group(1)) if match else 0
+
+            for model in sorted(available, key=_model_size_key, reverse=True):
                 logger.info(f"Using available model: {model} (configured models not found)")
                 return model
 

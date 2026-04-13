@@ -1,46 +1,74 @@
-# Sovereign Agent Configuration Example
-# Copy this to config.yaml and customize as needed
-# All settings have sensible defaults and are optional
+# Sovereign Agent Configuration
+# Copy to config.yaml and customize. All settings are optional with sensible defaults.
+# Environment variables override file settings (prefix: SOVEREIGN_)
 
 # LLM Configuration
 llm:
-  # Model to use (must be available in Ollama)
+  # Provider: "ollama" (local) or "openai" (any OpenAI-compatible API)
+  provider: "ollama"
+
+  # Default model (used when routing is disabled)
   model: "qwen2.5-coder:14b"
 
-  # Ollama server URL
-  ollama_url: "http://localhost:11434"
+  # API endpoint
+  # Ollama: http://localhost:11434
+  # OpenAI: https://api.openai.com/v1
+  # vLLM:   http://localhost:8000/v1
+  # LM Studio: http://localhost:1234/v1
+  base_url: "http://localhost:11434"
+
+  # API key (only needed for openai provider or cloud APIs)
+  # api_key: "sk-..."
 
   # Request timeout in seconds
-  timeout: 300.0
+  timeout: 600.0
 
   # Sampling temperature (0.0 = deterministic, 1.0 = creative)
   temperature: 0.1
 
-  # Maximum tokens to generate per request
-  max_tokens: 4096
+  # Maximum tokens to generate per response
+  max_tokens: 16384
 
-  # Retry configuration
-  max_retries: 3
-  retry_delay: 1.0  # Initial delay in seconds (uses exponential backoff)
+  # Context window size in tokens (depends on model + available RAM)
+  # 32768 = ~16GB RAM, 65536 = ~32GB RAM, 131072 = ~64GB RAM
+  context_window: 32768
+
+  # Retry on failure
+  max_retries: 5
+  retry_delay: 2.0
+
+  # Model routing — maps task complexity to different models
+  # The router auto-selects based on task analysis
+  models:
+    small: "qwen2.5-coder:7b"     # Fast: explanations, formatting, simple edits
+    medium: "qwen2.5-coder:14b"   # Balanced: most coding tasks
+    large: "qwen2.5-coder:32b"    # Complex: architecture, multi-file, deep debugging
+
+  # Examples for other setups:
+  #
+  # DeepSeek (high quality):
+  #   models:
+  #     small: "deepseek-coder-v2:16b"
+  #     medium: "deepseek-coder-v2:16b"
+  #     large: "deepseek-r1:32b"
+  #
+  # Single model (no routing):
+  #   model: "codestral:22b"
+  #
+  # Cloud API (OpenAI-compatible):
+  #   provider: "openai"
+  #   base_url: "https://api.openai.com/v1"
+  #   api_key: "sk-..."
+  #   model: "gpt-4o"
 
 # Logging Configuration
 logging:
-  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  level: "INFO"
-
-  # Optional log file path (leave empty for no file logging)
-  log_file: null  # Example: "logs/sovereign-agent.log"
-
-  # Whether to log to console
+  level: "INFO"           # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_file: null          # e.g. "logs/sovereign-agent.log"
   console: true
-
-  # Use JSON format for structured logging
   json_format: false
 
 # Agent Configuration
 agent:
-  # Maximum iterations per task (prevents infinite loops)
-  max_iterations: 10
-
-  # Working directory (leave empty to use current directory)
-  working_dir: null  # Example: "/path/to/project"
+  max_iterations: 15      # Max tool-call loops per turn (prevents runaway)
+  working_dir: null       # Project directory (default: current dir)

@@ -116,7 +116,7 @@ def main() -> None:
     # Create agent config from loaded config
     agent_config = AgentConfig(
         model=config.llm.model,
-        ollama_url=config.llm.ollama_url,
+        ollama_url=config.llm.base_url,
         max_iterations=config.agent.max_iterations,
         temperature=config.llm.temperature,
         max_retries=config.llm.max_retries,
@@ -133,11 +133,11 @@ def main() -> None:
         sys.exit(1)
     
     if not agent.llm.model_exists():
-        console.print(f"[red]Error: Model '{config.model}' not found.[/red]")
-        console.print(f"[yellow]Pull it with: ollama pull {config.model}[/yellow]")
+        console.print(f"[red]Error: Model '{config.llm.model}' not found.[/red]")
+        console.print(f"[yellow]Pull it with: ollama pull {config.llm.model}[/yellow]")
         sys.exit(1)
-    
-    console.print(f"[green]✓ Connected to Ollama with model: {config.model}[/green]")
+
+    console.print(f"[green]✓ Connected to Ollama with model: {config.llm.model}[/green]")
     console.print()
     console.print("[dim]Commands: 'exit' to quit, 'clear' to reset conversation[/dim]")
     console.print()

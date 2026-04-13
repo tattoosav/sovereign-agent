@@ -78,10 +78,10 @@ class OllamaClient:
         self,
         model: str = "qwen2.5-coder:32b",
         base_url: str = "http://localhost:11434",
-        timeout: float = 600.0,  # 10 minutes for very complex tasks
-        max_retries: int = 5,    # More retries for reliability
+        timeout: float = 600.0,
+        max_retries: int = 5,
         retry_delay: float = 2.0,
-        context_window: int = 32768,  # Large context window for complex tasks
+        context_window: int = 32768,
     ):
         self.model = model
         self.base_url = base_url.rstrip("/")
@@ -361,3 +361,244 @@ class OllamaClient:
     
     def __exit__(self, *args: object) -> None:
         self.close()
+
+
+class OpenAICompatibleClient:
+    """
+    Client for any OpenAI-compatible API (OpenAI, vLLM, LM Studio, Together, etc).
+
+    Drop-in replacement for OllamaClient — same interface, different backend.
+    """
+
+    def __init__(
+        self,
+        model: str = "gpt-4o",
+        base_url: str = "https://api.openai.com/v1",
+        api_key: str = "",
+        timeout: float = 600.0,
+        max_retries: int = 5,
+        retry_delay: float = 2.0,
+        context_window: int = 128000,
+    ):
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.context_window = context_window
+
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        self._client = httpx.Client(timeout=timeout, headers=headers)
+
+        logger.info(
+            f"Initialized OpenAICompatibleClient: model={model}, url={base_url}, "
+            f"timeout={timeout}s, context={context_window}"
+        )
+
+    def generate(
+        self,
+        prompt: str,
+        system: str | None = None,
+        temperature: float = 0.1,
+        max_tokens: int = 16384,
+    ) -> LLMResponse:
+        """Generate a completion via chat endpoint."""
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        return self.chat(messages, temperature, max_tokens)
+
+    def _truncate_messages(self, messages: list[dict[str, str]], max_chars: int = 100000) -> list[dict[str, str]]:
+        """Truncate messages to fit context. Same logic as OllamaClient."""
+        total_chars = sum(len(m.get("content", "")) for m in messages)
+        if total_chars <= max_chars:
+            return messages
+
+        if len(messages) <= 3:
+            return [
+                {**m, "content": m.get("content", "")[:max_chars // len(messages)]}
+                for m in messages
+            ]
+
+        result = [messages[0]]
+        middle_messages = messages[1:-4]
+        recent_messages = messages[-4:]
+
+        if middle_messages:
+            summary_parts = []
+            for msg in middle_messages[-6:]:
+                role = msg.get("role", "")
+                content = msg.get("content", "")[:200]
+                if role == "user":
+                    summary_parts.append(f"User: {content}...")
+                elif role == "assistant":
+                    if "<tool" in content:
+                        summary_parts.append("Assistant: [executed tools]")
+                    else:
+                        summary_parts.append(f"Assistant: {content[:100]}...")
+            if summary_parts:
+                result.append({
+                    "role": "system",
+                    "content": "[Earlier conversation summary]\n" + "\n".join(summary_parts)
+                })
+
+        result.extend(recent_messages)
+
+        for i, msg in enumerate(result):
+            if len(msg.get("content", "")) > 30000:
+                result[i] = {**msg, "content": msg["content"][:30000] + "\n[...truncated...]"}
+
+        return result
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.1,
+        max_tokens: int = 16384,
+    ) -> LLMResponse:
+        """Chat completion via OpenAI-compatible API."""
+        max_input_chars = (self.context_window - max_tokens) * 4
+        messages = self._truncate_messages(messages, max_chars=max_input_chars)
+
+        def _do_chat() -> LLMResponse:
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": False,
+            }
+
+            response = self._client.post(
+                f"{self.base_url}/chat/completions",
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            choice = data.get("choices", [{}])[0]
+            content = choice.get("message", {}).get("content", "")
+            usage = data.get("usage", {})
+            tokens = usage.get("completion_tokens", 0) or usage.get("total_tokens", 0)
+
+            return LLMResponse(content=content, tokens_used=tokens, model=self.model)
+
+        retrying_chat = retry_with_backoff(
+            _do_chat, max_retries=self.max_retries, base_delay=self.retry_delay
+        )
+        return retrying_chat()
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.1,
+        max_tokens: int = 16384,
+    ):
+        """Streaming chat via OpenAI-compatible API."""
+        import json
+
+        max_input_chars = (self.context_window - max_tokens) * 4
+        messages = self._truncate_messages(messages, max_chars=max_input_chars)
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+
+        with self._client.stream(
+            "POST", f"{self.base_url}/chat/completions",
+            json=payload, timeout=self.timeout,
+        ) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:]  # Strip "data: " prefix
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    data = json.loads(data_str)
+                    delta = data.get("choices", [{}])[0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        yield content
+                except json.JSONDecodeError:
+                    continue
+
+    def is_available(self) -> bool:
+        """Check if the API is reachable."""
+        try:
+            response = self._client.get(f"{self.base_url}/models")
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def model_exists(self) -> bool:
+        """Check if the model is available (best-effort)."""
+        try:
+            response = self._client.get(f"{self.base_url}/models")
+            if response.status_code != 200:
+                return True  # Assume it exists if we can't list
+            data = response.json()
+            models = data.get("data", [])
+            model_ids = [m.get("id", "") for m in models]
+            return self.model in model_ids or not model_ids  # If no list, assume OK
+        except Exception:
+            return True  # Can't check — assume the model name is valid
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> "OpenAICompatibleClient":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+
+def create_llm_client(
+    provider: str = "ollama",
+    model: str = "qwen2.5-coder:14b",
+    base_url: str = "http://localhost:11434",
+    api_key: str = "",
+    timeout: float = 600.0,
+    max_retries: int = 5,
+    retry_delay: float = 2.0,
+    context_window: int = 32768,
+) -> OllamaClient | OpenAICompatibleClient:
+    """
+    Factory function to create the right LLM client based on provider.
+
+    Args:
+        provider: "ollama" or "openai" (any OpenAI-compatible API)
+
+    Returns:
+        OllamaClient or OpenAICompatibleClient instance
+    """
+    if provider == "openai":
+        return OpenAICompatibleClient(
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            timeout=timeout,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            context_window=context_window,
+        )
+    else:
+        return OllamaClient(
+            model=model,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            context_window=context_window,
+        )

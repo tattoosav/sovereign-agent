@@ -17,15 +17,28 @@ import yaml
 
 
 @dataclass
+class ModelRoutingConfig:
+    """Model routing configuration - maps task complexity to model names."""
+    small: str = "qwen2.5-coder:7b"
+    medium: str = "qwen2.5-coder:14b"
+    large: str = "qwen2.5-coder:32b"
+
+
+@dataclass
 class LLMConfig:
     """LLM configuration."""
+    # Provider: "ollama" or "openai" (any OpenAI-compatible API)
+    provider: str = "ollama"
     model: str = "qwen2.5-coder:14b"
-    ollama_url: str = "http://localhost:11434"
-    timeout: float = 600.0  # 10 minutes for large code generation
+    base_url: str = "http://localhost:11434"
+    api_key: str = ""  # Only needed for openai provider
+    timeout: float = 600.0
     temperature: float = 0.1
-    max_tokens: int = 16384  # 16K tokens for full file generation
-    max_retries: int = 5  # More retries for reliability
+    max_tokens: int = 16384
+    context_window: int = 32768
+    max_retries: int = 5
     retry_delay: float = 2.0
+    models: ModelRoutingConfig = field(default_factory=ModelRoutingConfig)
 
 
 @dataclass
@@ -84,11 +97,14 @@ def load_config(config_path: Optional[Path] = None) -> Config:
     # Environment variable overrides
     env_overrides = {
         "llm": {
+            "provider": os.getenv("SOVEREIGN_PROVIDER"),
             "model": os.getenv("SOVEREIGN_MODEL"),
-            "ollama_url": os.getenv("SOVEREIGN_OLLAMA_URL"),
+            "base_url": os.getenv("SOVEREIGN_BASE_URL") or os.getenv("SOVEREIGN_OLLAMA_URL"),
+            "api_key": os.getenv("SOVEREIGN_API_KEY"),
             "timeout": _parse_float(os.getenv("SOVEREIGN_TIMEOUT")),
             "temperature": _parse_float(os.getenv("SOVEREIGN_TEMPERATURE")),
             "max_tokens": _parse_int(os.getenv("SOVEREIGN_MAX_TOKENS")),
+            "context_window": _parse_int(os.getenv("SOVEREIGN_CONTEXT_WINDOW")),
             "max_retries": _parse_int(os.getenv("SOVEREIGN_MAX_RETRIES")),
             "retry_delay": _parse_float(os.getenv("SOVEREIGN_RETRY_DELAY")),
         },
@@ -112,8 +128,19 @@ def load_config(config_path: Optional[Path] = None) -> Config:
             if value is not None:
                 config_dict[section][key] = value
 
+    # Handle backwards compatibility: ollama_url -> base_url
+    llm_dict = config_dict.get("llm", {})
+    if "ollama_url" in llm_dict and "base_url" not in llm_dict:
+        llm_dict["base_url"] = llm_dict.pop("ollama_url")
+    elif "ollama_url" in llm_dict:
+        llm_dict.pop("ollama_url")
+
+    # Extract nested models config
+    models_dict = llm_dict.pop("models", {})
+    models_config = ModelRoutingConfig(**models_dict) if models_dict else ModelRoutingConfig()
+
     # Build config object
-    llm_config = LLMConfig(**config_dict.get("llm", {}))
+    llm_config = LLMConfig(**llm_dict, models=models_config) if llm_dict else LLMConfig()
     logging_config = LoggingConfig(**config_dict.get("logging", {}))
     agent_config = AgentConfig(**config_dict.get("agent", {}))
 
