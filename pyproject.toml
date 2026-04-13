@@ -1,10 +1,10 @@
 [project]
 name = "sovereign-agent"
-version = "0.1.0"
-description = "A locally-running AI coding agent built from scratch"
+version = "0.2.0"
+description = "AI coding agent with API, Telegram bot, and multi-provider LLM support"
 requires-python = ">=3.11"
 dependencies = [
-    "httpx>=0.27.0",      # Async HTTP client for Ollama
+    "httpx>=0.27.0",      # HTTP client for LLM APIs + Telegram bot
     "rich>=13.7.0",       # Pretty terminal output
     "pyyaml>=6.0.0",      # YAML configuration files
     "chromadb>=0.4.0",    # Vector database for RAG
@@ -17,6 +17,11 @@ dev = [
     "pytest>=8.0.0",
     "mypy>=1.8.0",
 ]
+
+[project.scripts]
+sovereign-agent = "src.main_v2:main"
+sovereign-web = "src.web:main"
+sovereign-telegram = "src.integrations.telegram_bot:main"
 
 [build-system]
 requires = ["hatchling"]
