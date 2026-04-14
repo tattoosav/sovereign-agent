@@ -9,6 +9,7 @@ from threading import Lock
 from typing import Any
 
 from src.agent import AgentV2, AgentConfigV2
+from src.agent.router import ModelRouter
 from src.core import load_config
 from src.memory import KnowledgeBase, VectorStore
 from src.tools import (
@@ -50,6 +51,14 @@ class SessionManager:
         self.session_timeout = session_timeout
         self._config = load_config()
 
+        # Configure model router from config
+        ModelRouter.configure(
+            small=self._config.llm.models.small,
+            medium=self._config.llm.models.medium,
+            large=self._config.llm.models.large,
+            base_url=self._config.llm.base_url,
+        )
+
     def _setup_tools(self, working_dir: Path) -> ToolRegistry:
         """Set up the tool registry with all available tools."""
         registry = ToolRegistry()
@@ -85,12 +94,13 @@ class SessionManager:
 
         agent_config = AgentConfigV2(
             model=self._config.llm.model,
-            ollama_url=self._config.llm.ollama_url,
+            ollama_url=self._config.llm.base_url,
             max_iterations=self._config.agent.max_iterations,
             temperature=self._config.llm.temperature,
             max_retries=self._config.llm.max_retries,
             retry_delay=self._config.llm.retry_delay,
-            # v2 features enabled
+            timeout=self._config.llm.timeout,
+            context_window=self._config.llm.context_window,
             enable_routing=True,
             enable_rag=True,
             enable_planning=True,
