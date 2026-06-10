@@ -57,12 +57,22 @@ class BaseTool(ABC):
         ...
     
     def to_prompt_format(self) -> str:
-        """Format tool info for inclusion in LLM prompt."""
-        params_str = "\n".join(
-            f"    - {name} ({info['type']}): {info['description']}"
-            + (" [required]" if info.get('required') else " [optional]")
-            for name, info in self.parameters.items()
-        )
+        """Format tool info for inclusion in LLM prompt.
+
+        Tolerant of two `parameters` styles: the structured
+        ``{"p": {"type": ..., "description": ..., "required": ...}}`` form and the
+        simple ``{"p": "description"}`` form used by some tools.
+        """
+        lines = []
+        for name, info in self.parameters.items():
+            if isinstance(info, dict):
+                ptype = info.get("type", "string")
+                desc = info.get("description", "")
+                suffix = " [required]" if info.get("required") else " [optional]"
+            else:
+                ptype, desc, suffix = "string", str(info), ""
+            lines.append(f"    - {name} ({ptype}): {desc}{suffix}")
+        params_str = "\n".join(lines)
         return f"""<tool_definition>
   <name>{self.name}</name>
   <description>{self.description}</description>

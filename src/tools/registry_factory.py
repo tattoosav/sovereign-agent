@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .base import BaseTool, ToolRegistry
 from .compound import register_compound_tools
+from .crm_tool import CRMTool
 from .dependencies import DependencyTool
 from .docgen import DocGenTool
 from .filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
@@ -51,6 +52,9 @@ def build_registry(
     _register_core(registry, paths)
     _register_shell(registry, working_dir, shell_timeout, shell_allowlist, shell_allowed)
     _register_specialized(registry, working_dir, ollama_url)
+
+    # CRM (local SQLite under the workspace) — the primary purpose of this build.
+    registry.register(CRMTool(db_path=working_dir / ".sovereign" / "crm.db"))
 
     # Compound tools build on top of the core tools registered above.
     base = {t.name: t for t in registry.all_tools()}
