@@ -17,10 +17,12 @@ $ErrorActionPreference = "SilentlyContinue"
 $nssm = "$InstallRoot\nssm.exe"
 
 Write-Host "Stopping services..." -ForegroundColor Cyan
+Stop-Service SovereignWeb
 Stop-Service SovereignAgent
 Stop-Service Ollama
 
 if (Test-Path $nssm) {
+    & $nssm remove SovereignWeb confirm
     & $nssm remove SovereignAgent confirm
     & $nssm remove Ollama confirm
 }

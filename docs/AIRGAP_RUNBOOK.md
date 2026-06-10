@@ -70,8 +70,8 @@ completion, then moves on to the next.
   task currently running, and counts. A recent timestamp = healthy.
 - **Logs:** `logs\out.log` and `logs\autonomous.log` (rotating, capped — they never
   fill the disk).
-- **Service:** `sc query SovereignAgent` or open **Services** (services.msc) and look
-  for `SovereignAgent` (Running) and `Ollama` (Running).
+- **Services:** open **Services** (services.msc) — `Ollama`, `SovereignAgent` (the
+  autonomous loop), and `SovereignWeb` (the CRM web UI) should all be **Running**.
 
 ---
 
@@ -99,13 +99,13 @@ designed so this never happens.
 ## 6. Start / stop / restart
 
 ```powershell
-Stop-Service SovereignAgent
-Start-Service SovereignAgent
-Restart-Service SovereignAgent
+Restart-Service SovereignWeb      # the CRM web UI
+Restart-Service SovereignAgent    # the autonomous loop
+Restart-Service Ollama            # the model backend
 ```
 
-Both services auto-start at boot; `SovereignAgent` waits for `Ollama` and auto-restarts
-if it ever exits.
+All three services auto-start at boot; `SovereignAgent` and `SovereignWeb` wait for
+`Ollama` and auto-restart if they ever exit.
 
 ---
 
@@ -113,9 +113,9 @@ if it ever exits.
 
 The CRM is the day-to-day tool. Two ways to use it:
 
-- **Web UI:** browse to `http://127.0.0.1:8000/crm` (start the web app with
-  `python -m src.web`). Tabs: Dashboard, Contacts, Pipeline, Follow-ups. The AI chat
-  is at `http://127.0.0.1:8000/`.
+- **Web UI:** browse to `http://127.0.0.1:8000/crm`. The web app runs automatically as
+  the `SovereignWeb` service (starts at boot) — no need to launch anything. Tabs:
+  Dashboard, Contacts, Pipeline, Follow-ups. The AI chat is at `http://127.0.0.1:8000/`.
 - **Natural language:** in the AI chat, just say things like "add a contact named
   Maria, phone 555-0102", "log a call with contact 4 — wants a quote", "what
   follow-ups are due?", "show me the pipeline".

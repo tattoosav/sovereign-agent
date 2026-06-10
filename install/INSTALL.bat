@@ -1,8 +1,12 @@
 @echo off
-REM Sovereign Agent - one-click air-gapped installer.
-REM Double-click this file on the offline target machine. It self-elevates and
-REM runs install_airgap.ps1 entirely from the USB bundle (no internet required).
+REM ============================================================
+REM  Sovereign Agent + CRM - one-click offline installer
+REM  Double-click this file on the OFFLINE target machine.
+REM  It self-elevates and runs install_airgap.ps1 from the USB.
+REM  No internet is required or used.
+REM ============================================================
 
+REM Self-elevate to Administrator if needed.
 net session >nul 2>&1
 if %errorLevel% neq 0 (
     echo Requesting administrator privileges...
@@ -10,11 +14,31 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
+echo.
 echo ============================================================
-echo   Sovereign Agent - Air-Gapped Install
+echo   Sovereign Agent + CRM - Air-Gapped Install
 echo ============================================================
+echo.
+echo This will install the offline AI + CRM and set it to start
+echo automatically at boot. It takes several minutes (copying the
+echo AI models is the slow part). Do not close this window.
+echo.
+pause
+
 powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0install_airgap.ps1"
+set RESULT=%errorLevel%
 
 echo.
-echo Done. See docs\AIRGAP_RUNBOOK.md for how to submit tasks.
+if %RESULT% neq 0 (
+    echo ============================================================
+    echo   INSTALL DID NOT COMPLETE. See the log path shown above.
+    echo ============================================================
+) else (
+    echo ============================================================
+    echo   INSTALL COMPLETE.
+    echo   Open the CRM at:  http://127.0.0.1:8000/crm
+    echo   See docs\AIRGAP_RUNBOOK.md for daily use.
+    echo ============================================================
+)
+echo.
 pause
