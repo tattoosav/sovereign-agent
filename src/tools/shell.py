@@ -7,29 +7,45 @@ Use allowed_commands and blocked_commands to restrict what can be run.
 
 import shlex
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from .base import BaseTool, ToolResult
 
 
+# Network-capable commands blocked unconditionally in the air-gapped build.
+# Defense-in-depth: even if the allowlist were widened, these can never run.
+NETWORK_BLOCKED = [
+    "curl", "wget", "Invoke-WebRequest", "Invoke-RestMethod", "iwr", "irm",
+    "bitsadmin", "certutil", "ncat", "telnet", "Start-BitsTransfer",
+    "ssh ", "scp ", "sftp", "pip install", "pip download", "pip3 install",
+    "npm install", "npm i ", "yarn add", "nuget", "dotnet restore",
+    "dotnet add", "git clone", "git pull", "git fetch", "git push",
+]
+
+
 class ShellTool(BaseTool):
     """Execute shell commands."""
-    
+
     def __init__(
         self,
         timeout: int = 30,
         allowed_commands: list[str] | None = None,
         blocked_commands: list[str] | None = None,
+        cwd: str | Path | None = None,
     ):
         self._timeout = timeout
         self._allowed_commands = allowed_commands  # If set, ONLY these commands work
-        self._blocked_commands = blocked_commands or [
+        self._cwd = str(cwd) if cwd is not None else None
+        base_blocked = blocked_commands or [
             "rm -rf /",
             "rm -rf ~",
             "mkfs",
             "dd if=",
             ":(){:|:&};:",  # Fork bomb
         ]
+        # Always include the network blocklist (air-gap defense-in-depth).
+        self._blocked_commands = base_blocked + NETWORK_BLOCKED
     
     @property
     def name(self) -> str:
@@ -95,7 +111,7 @@ class ShellTool(BaseTool):
                 capture_output=True,
                 text=True,
                 timeout=self._timeout,
-                cwd=None,  # Uses current working directory
+                cwd=self._cwd,  # Restrict to working dir when set
             )
             
             output = result.stdout

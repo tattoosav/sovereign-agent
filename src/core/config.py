@@ -44,12 +44,51 @@ class AgentConfig:
     working_dir: Optional[str] = None
 
 
+# Default curated allowlist for shell commands in the air-gapped build.
+# Deliberately excludes anything that can reach the network (curl, wget,
+# Invoke-WebRequest, pip install, npm, ssh, scp, ...).
+DEFAULT_SHELL_ALLOWED = [
+    # Python / build / test
+    "python", "python3", "py", "pytest", "mypy", "ruff", "pylint",
+    "cmake", "msbuild", "dotnet", "make", "ninja",
+    # Version control (local ops)
+    "git",
+    # Safe file inspection (cross-platform)
+    "dir", "type", "ls", "cat", "echo", "findstr", "where", "whoami",
+    "cd", "mkdir", "copy", "move", "ren",
+]
+
+
+@dataclass
+class AirgapConfig:
+    """
+    Air-gap enforcement settings.
+
+    This build is permanently offline: the internet-capable tools are removed
+    from the codebase entirely, so there is no `enabled` toggle to re-enable
+    them. These settings govern host binding, shell restriction, and the
+    startup egress self-check.
+    """
+    allowed_hosts: list[str] = field(
+        default_factory=lambda: ["127.0.0.1", "localhost"]
+    )
+    allowed_egress: list[str] = field(
+        default_factory=lambda: ["http://127.0.0.1:11434", "http://localhost:11434"]
+    )
+    enforce_egress_check: bool = True
+    shell_allowlist_mode: bool = True
+    shell_allowed_commands: list[str] = field(
+        default_factory=lambda: list(DEFAULT_SHELL_ALLOWED)
+    )
+
+
 @dataclass
 class Config:
     """Main configuration object."""
     llm: LLMConfig = field(default_factory=LLMConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
+    airgap: AirgapConfig = field(default_factory=AirgapConfig)
 
 
 def load_config(config_path: Optional[Path] = None) -> Config:
@@ -102,6 +141,10 @@ def load_config(config_path: Optional[Path] = None) -> Config:
             "max_iterations": _parse_int(os.getenv("SOVEREIGN_MAX_ITERATIONS")),
             "working_dir": os.getenv("SOVEREIGN_WORKING_DIR"),
         },
+        "airgap": {
+            "enforce_egress_check": _parse_bool(os.getenv("SOVEREIGN_AIRGAP_ENFORCE")),
+            "shell_allowlist_mode": _parse_bool(os.getenv("SOVEREIGN_SHELL_ALLOWLIST")),
+        },
     }
 
     # Merge environment overrides (only if value is not None)
@@ -116,11 +159,13 @@ def load_config(config_path: Optional[Path] = None) -> Config:
     llm_config = LLMConfig(**config_dict.get("llm", {}))
     logging_config = LoggingConfig(**config_dict.get("logging", {}))
     agent_config = AgentConfig(**config_dict.get("agent", {}))
+    airgap_config = AirgapConfig(**config_dict.get("airgap", {}))
 
     return Config(
         llm=llm_config,
         logging=logging_config,
         agent=agent_config,
+        airgap=airgap_config,
     )
 
 

@@ -11,17 +11,7 @@ from typing import Any
 from src.agent import AgentV2, AgentConfigV2
 from src.core import load_config
 from src.memory import KnowledgeBase, VectorStore
-from src.tools import (
-    CodeSearchTool,
-    GitTool,
-    ListDirectoryTool,
-    PythonExecTool,
-    ReadFileTool,
-    ShellTool,
-    StrReplaceTool,
-    ToolRegistry,
-    WriteFileTool,
-)
+from src.tools import ToolRegistry, build_registry
 
 logger = logging.getLogger(__name__)
 
@@ -51,28 +41,17 @@ class SessionManager:
         self._config = load_config()
 
     def _setup_tools(self, working_dir: Path) -> ToolRegistry:
-        """Set up the tool registry with all available tools."""
-        registry = ToolRegistry()
-        # Allow working dir and /tmp for uploaded files
-        allowed_paths = [working_dir, Path("/tmp")]
-
-        registry.register(ReadFileTool(allowed_paths=allowed_paths))
-        registry.register(WriteFileTool(allowed_paths=allowed_paths))
-        registry.register(ListDirectoryTool(allowed_paths=allowed_paths))
-        registry.register(StrReplaceTool(allowed_paths=allowed_paths))
-        registry.register(CodeSearchTool(allowed_paths=allowed_paths))
-        registry.register(GitTool(allowed_paths=allowed_paths))
-        registry.register(ShellTool(
-            timeout=300,  # 5 minutes for complex operations on GPU
-            blocked_commands=["rm -rf /", "rm -rf ~", "mkfs", "dd if=", ":(){:|:&};:"],
-            # No allowed_commands restriction - agent has full autonomy
-        ))
-        registry.register(PythonExecTool(
-            timeout=300,  # 5 minutes for GPU operations
-            working_dir=working_dir,
-        ))
-
-        return registry
+        """Set up the tool registry via the central air-gapped factory."""
+        # Allow working dir and /tmp (uploaded files); air-gap factory excludes
+        # every network-capable tool.
+        return build_registry(
+            working_dir,
+            shell_timeout=300,
+            shell_allowlist=self._config.airgap.shell_allowlist_mode,
+            shell_allowed=self._config.airgap.shell_allowed_commands,
+            ollama_url=self._config.llm.ollama_url,
+            allowed_paths=[working_dir, Path("/tmp")],
+        )
 
     def _create_agent(self) -> AgentV2:
         """Create a new v2 agent instance with full intelligence features."""

@@ -15,6 +15,35 @@ Uses Ollama + Qwen 2.5 Coder as the brain, with custom tool implementations, vec
 **MAJOR MILESTONE: Intelligent All-in-One Coding Agent with Learning! 🎉**
 **Phases 1-70 Foundation + Intelligence + Performance + Specializations + Learning COMPLETE**
 
+### Air-Gapped Autonomous Build (Phase 71)
+A hardened, **fully offline** delivery for an isolated single-Windows-workstation
+client. Runs autonomously, persists across reboots, and never touches the internet.
+
+- **Internet tools removed** — `web_research.py` deleted; the dependencies tool is
+  reduced to local `analyze` only (no registry calls). Nothing network-capable is
+  importable or registrable.
+- **Central tool gate** — `src/tools/registry_factory.py::build_registry` is the ONLY
+  tool-registration path; it wires up the full local toolset (no egress branch).
+- **Shell hardening** — allowlist mode + working-dir restriction + a network-command
+  blocklist (`src/tools/shell.py`).
+- **Egress self-check** — `src/core/egress_guard.py::assert_airgap` aborts startup if
+  the public internet is reachable (run standalone: `python -m src.core.egress_guard`).
+- **Local-only web** — CORS locked to local origins, host binding refuses non-local.
+- **Autonomous daemon** — `src/agent/autonomous.py` + `src/autonomous.py`: filesystem
+  task queue (`tasks/inbox|active|done|failed|state`), runs each task via `AgentV2`,
+  persists via `ConversationStore`, resumes interrupted tasks on boot.
+- **Longevity** — fault isolation, per-task timeout, Ollama backoff, atomic state
+  writes, rotating logs, retention/disk guards. Chaos-tested in `tests/test_longevity.py`.
+- **Offline USB bundle** — `install/build_bundle.ps1` assembles app + wheelhouse +
+  Python + Ollama + models + NSSM + checksums; `install/INSTALL.bat` →
+  `install_airgap.ps1` performs a one-action, zero-network install. Operator guide:
+  `docs/AIRGAP_RUNBOOK.md`.
+- Config: `src/core/config.py::AirgapConfig` (`SOVEREIGN_AIRGAP_ENFORCE`,
+  `SOVEREIGN_SHELL_ALLOWLIST`). Client config template: `install/config.yaml`.
+
+Run the daemon: `python -m src.autonomous --working-dir <dir>`
+Tests: `pytest tests/test_airgap.py tests/test_egress_guard.py tests/test_autonomous.py tests/test_longevity.py`
+
 ### Completed Phases
 - ✅ **Phase 1:** Project Hardening
 - ✅ **Phase 11:** Diff-Based File Editing

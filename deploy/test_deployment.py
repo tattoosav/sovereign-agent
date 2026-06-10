@@ -69,32 +69,17 @@ def test_ollama():
 
 
 def test_web_research():
-    """Test web research tool."""
-    print_header("Testing Web Research")
+    """Air-gapped build: the web research tool must NOT exist."""
+    print_header("Verifying Air-Gap (no web research tool)")
 
     try:
-        from src.tools.web_research import WebResearchTool
-
-        tool = WebResearchTool()
-
-        # Test search
-        result = tool.execute("search", query="python tutorial", max_results=3)
-        print_result("Web search", result.success,
-                    f"Found results" if result.success else result.error)
-
-        # Test fetch
-        result = tool.execute("fetch", url="https://example.com")
-        print_result("Web fetch", result.success,
-                    "Content retrieved" if result.success else result.error)
-
+        import importlib
+        importlib.import_module("src.tools.web_research")
+        print_result("Air-gap", False, "web_research module is present (should be deleted)")
+        return False
+    except ModuleNotFoundError:
+        print_result("Air-gap", True, "web_research tool correctly removed")
         return True
-
-    except ImportError as e:
-        print_result("Import", False, str(e))
-        return False
-    except Exception as e:
-        print_result("Web research", False, str(e))
-        return False
 
 
 def test_vision():

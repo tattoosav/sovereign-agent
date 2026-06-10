@@ -10,6 +10,7 @@ Provides consistent logging across the entire application with support for:
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
@@ -85,10 +86,15 @@ def setup_logging(
         console_handler.setFormatter(console_format)
         root_logger.addHandler(console_handler)
 
-    # File handler
+    # File handler (rotating, so unattended long-running daemons never fill disk)
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=10 * 1024 * 1024,  # 10 MB per file
+            backupCount=5,              # keep 5 rotations (~60 MB cap)
+            encoding="utf-8",
+        )
         file_handler.setLevel(numeric_level)
 
         # Always use structured format for files

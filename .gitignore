@@ -1,0 +1,34 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local agent state / persistence
+.sovereign/
+.patterns/
+.sovereign_db/
+logs/
+
+# Task queue runtime dirs
+tasks/active/
+tasks/done/
+tasks/failed/
+tasks/state/
+
+# Offline build output
+SovereignAgent-USB/
+wheelhouse/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local config (the air-gap template lives in install/config.yaml)
+/config.yaml

@@ -20,18 +20,10 @@ from rich.console import Console
 from rich.panel import Panel
 
 from src.agent import AgentV2, AgentConfigV2
-from src.core import load_config, setup_logging
+from src.core import assert_airgap, load_config, setup_logging
+from src.core.egress_guard import EgressViolation
 from src.memory import KnowledgeBase, VectorStore
-from src.tools import (
-    CodeSearchTool,
-    GitTool,
-    ListDirectoryTool,
-    ReadFileTool,
-    ShellTool,
-    StrReplaceTool,
-    ToolRegistry,
-    WriteFileTool,
-)
+from src.tools import ToolRegistry, build_registry
 
 logger = logging.getLogger(__name__)
 
@@ -73,23 +65,15 @@ def setup_signal_handlers() -> None:
 
 
 def setup_tools(working_dir: Path) -> ToolRegistry:
-    """Set up the tool registry with all available tools."""
-    registry = ToolRegistry()
-
-    allowed_paths = [working_dir]
-    registry.register(ReadFileTool(allowed_paths=allowed_paths))
-    registry.register(WriteFileTool(allowed_paths=allowed_paths))
-    registry.register(ListDirectoryTool(allowed_paths=allowed_paths))
-    registry.register(StrReplaceTool(allowed_paths=allowed_paths))
-    registry.register(CodeSearchTool(allowed_paths=allowed_paths))
-    registry.register(GitTool(allowed_paths=allowed_paths))
-    registry.register(ShellTool(
-        timeout=30,
-        blocked_commands=["rm -rf /", "rm -rf ~", "mkfs", "dd if="],
-    ))
-
-    logger.info(f"Registered {len(registry.all_tools())} tools")
-    return registry
+    """Set up the tool registry via the central air-gapped factory."""
+    config = load_config()
+    return build_registry(
+        working_dir,
+        shell_timeout=30,
+        shell_allowlist=config.airgap.shell_allowlist_mode,
+        shell_allowed=config.airgap.shell_allowed_commands,
+        ollama_url=config.llm.ollama_url,
+    )
 
 
 def main() -> None:
@@ -107,6 +91,14 @@ def main() -> None:
     )
 
     logger.info("Starting Sovereign Agent v2")
+
+    # Air-gap self-check: confirm only local Ollama is reachable.
+    try:
+        assert_airgap(config)
+    except EgressViolation as e:
+        logger.critical(str(e))
+        print(f"\nAIR-GAP VIOLATION: {e}")
+        sys.exit(1)
 
     # Setup signal handlers
     setup_signal_handlers()

@@ -95,8 +95,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         session_manager.close_all()
 
 
-def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
+def _local_cors_origins(allowed_hosts: list[str], port: int) -> list[str]:
+    """Build the explicit list of allowed local origins (no wildcard)."""
+    origins: list[str] = []
+    for host in allowed_hosts:
+        origins.append(f"http://{host}:{port}")
+        origins.append(f"http://{host}")
+    return origins
+
+
+def create_app(port: int = 8000) -> FastAPI:
+    """Create and configure the FastAPI application (air-gapped, local-only CORS)."""
+    from src.core import load_config
+
+    config = load_config()
     app = FastAPI(
         title="Sovereign Agent API",
         description="Web API for the Sovereign Agent - Your Local Coding Assistant",
@@ -104,10 +116,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Add CORS middleware
+    # CORS locked to local origins only (never "*"): this is an air-gapped build.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_local_cors_origins(config.airgap.allowed_hosts, port),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

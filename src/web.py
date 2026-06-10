@@ -18,6 +18,11 @@ from src.core import load_config, setup_logging
 logger = logging.getLogger(__name__)
 
 
+def _validate_host(host: str, allowed_hosts: list[str]) -> bool:
+    """Air-gapped build: only local hosts may be bound."""
+    return host in allowed_hosts
+
+
 def main() -> None:
     """Main entry point for web server."""
     # Parse command-line arguments
@@ -40,12 +45,21 @@ def main() -> None:
 
     logger.info("Starting Sovereign Agent Web Server")
 
-    # Create FastAPI app
-    app = create_app()
-
     # Server configuration from args
     host = args.host
     port = args.port
+
+    # Air-gap: refuse to bind to a non-local host (fail loud, never rebind silently).
+    if not _validate_host(host, config.airgap.allowed_hosts):
+        logger.error(
+            f"Refusing to bind to non-local host '{host}'. This is an air-gapped "
+            f"build; allowed hosts: {config.airgap.allowed_hosts}."
+        )
+        print(f"ERROR: host '{host}' is not local. Use one of {config.airgap.allowed_hosts}.")
+        sys.exit(1)
+
+    # Create FastAPI app (CORS origins built for this port)
+    app = create_app(port=port)
 
     print(f"""
 ================================================================

@@ -1,0 +1,31 @@
+# Sovereign Agent - Air-Gapped Client Build
+# Installed to C:\Sovereign\app\config.yaml by install_airgap.ps1.
+# This machine runs fully offline. Do not point ollama_url at any non-local host.
+
+llm:
+  model: "qwen2.5-coder:14b"          # router auto-selects 7b/14b/32b among installed
+  ollama_url: "http://127.0.0.1:11434" # local Ollama only
+  timeout: 600.0
+  temperature: 0.1
+  max_retries: 5
+  retry_delay: 2.0
+
+logging:
+  level: "INFO"
+  log_file: "C:\\Sovereign\\logs\\autonomous.log"  # rotating audit trail on the box
+  console: true
+  json_format: false
+
+agent:
+  max_iterations: 50
+  working_dir: "C:\\Sovereign\\workspace"
+
+airgap:
+  allowed_hosts:
+    - "127.0.0.1"
+    - "localhost"
+  allowed_egress:
+    - "http://127.0.0.1:11434"
+    - "http://localhost:11434"
+  enforce_egress_check: true            # abort startup if the internet is reachable
+  shell_allowlist_mode: true            # only curated local commands may run

@@ -22,8 +22,8 @@ from .scaffolding import ScaffoldingTool
 from .dependencies import DependencyTool
 from .docgen import DocGenTool
 from .learning import LearningTool
-from .web_research import WebResearchTool
 from .vision import VisionTool, ScreenshotTool
+from .registry_factory import build_registry
 
 __all__ = [
     # Base
@@ -54,8 +54,9 @@ __all__ = [
     "DependencyTool",
     "DocGenTool",
     "LearningTool",
-    # Research & Vision
-    "WebResearchTool",
+    # Vision (local Ollama only)
     "VisionTool",
     "ScreenshotTool",
+    # Air-gapped registry factory (the ONLY tool-registration path)
+    "build_registry",
 ]
