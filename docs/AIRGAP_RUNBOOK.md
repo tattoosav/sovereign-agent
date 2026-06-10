@@ -109,6 +109,26 @@ if it ever exits.
 
 ---
 
+## 6a. The CRM
+
+The CRM is the day-to-day tool. Two ways to use it:
+
+- **Web UI:** browse to `http://127.0.0.1:8000/crm` (start the web app with
+  `python -m src.web`). Tabs: Dashboard, Contacts, Pipeline, Follow-ups. The AI chat
+  is at `http://127.0.0.1:8000/`.
+- **Natural language:** in the AI chat, just say things like "add a contact named
+  Maria, phone 555-0102", "log a call with contact 4 — wants a quote", "what
+  follow-ups are due?", "show me the pipeline".
+
+**Data & backups:** the customer database is `C:\Sovereign\workspace\.sovereign\crm.db`.
+The autonomous daemon writes a **daily briefing** to `workspace\tasks\reports\` and a
+**daily backup** (DB snapshot + CSV exports) to `workspace\.sovereign\backups\`. You
+can also click **Backup now** in the CRM UI any time.
+
+> IMPORTANT: this machine is air-gapped, so the customer database exists ONLY here.
+> Periodically copy `workspace\.sovereign\backups\` to a second drive or USB. If this
+> disk fails and you have no copy, the data is gone.
+
 ## 7. Add or replace models (offline)
 
 Models live in `%USERPROFILE%\.ollama\models`. To add one, copy the exported model

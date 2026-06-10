@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign CRM</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/crm.css">
+</head>
+<body>
+    <div class="crm-app">
+        <header class="crm-header">
+            <h1>Sovereign CRM</h1>
+            <nav class="crm-tabs">
+                <button class="tab active" data-view="dashboard">Dashboard</button>
+                <button class="tab" data-view="contacts">Contacts</button>
+                <button class="tab" data-view="pipeline">Pipeline</button>
+                <button class="tab" data-view="tasks">Follow-ups</button>
+                <a class="tab link" href="/">AI Chat →</a>
+            </nav>
+            <div class="crm-actions">
+                <button id="backup-btn" class="btn small">Backup now</button>
+                <span id="backup-status" class="muted"></span>
+            </div>
+        </header>
+
+        <main id="crm-main">
+            <!-- Dashboard -->
+            <section id="view-dashboard" class="view active">
+                <div class="cards" id="dash-cards"></div>
+                <div class="grid-2">
+                    <div class="panel"><h3>Pipeline by stage</h3><div id="dash-pipeline"></div></div>
+                    <div class="panel"><h3>Due follow-ups</h3><div id="dash-tasks"></div></div>
+                </div>
+                <div class="panel"><h3>Stale contacts (open deal, &gt;30d quiet)</h3><div id="dash-stale"></div></div>
+            </section>
+
+            <!-- Contacts -->
+            <section id="view-contacts" class="view">
+                <div class="toolbar">
+                    <input id="contact-search" placeholder="Search contacts...">
+                    <button id="new-contact-btn" class="btn primary small">+ New contact</button>
+                </div>
+                <div class="split">
+                    <div id="contact-list" class="list"></div>
+                    <div id="contact-detail" class="detail muted">Select a contact.</div>
+                </div>
+            </section>
+
+            <!-- Pipeline -->
+            <section id="view-pipeline" class="view">
+                <div class="toolbar">
+                    <button id="new-deal-btn" class="btn primary small">+ New deal</button>
+                </div>
+                <div id="pipeline-board" class="board"></div>
+            </section>
+
+            <!-- Tasks -->
+            <section id="view-tasks" class="view">
+                <div class="toolbar">
+                    <button id="new-task-btn" class="btn primary small">+ New follow-up</button>
+                </div>
+                <div id="tasks-list" class="list"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" id="modal-close">&times;</span>
+            <h2 id="modal-title"></h2>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="/static/crm.js"></script>
+</body>
+</html>

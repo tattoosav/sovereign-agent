@@ -107,3 +107,18 @@ def test_heartbeat_written(tmp_path, monkeypatch):
     runner._write_heartbeat(current="x")
     beat = (tmp_path / "tasks" / "state" / "heartbeat.json").read_text()
     assert '"current_task": "x"' in beat
+
+
+def test_autonomous_crm_briefing_and_backup(tmp_path, monkeypatch):
+    from src.crm import Contact
+    agent = FakeAgent()
+    runner = _make_runner(tmp_path, monkeypatch, agent)
+    runner._crm.repo.add_contact(Contact(name="Briefing Client"))
+    runner._maybe_crm_report()
+    reports = list((tmp_path / "tasks" / "reports").glob("crm-briefing-*.md"))
+    assert reports, "daily briefing should be filed"
+    assert "CRM Daily Briefing" in reports[0].read_text()
+    assert list((tmp_path / ".sovereign" / "backups").glob("crm-*.db")), "db backup written"
+    # Idempotent for the day: second call does not create a duplicate.
+    runner._maybe_crm_report()
+    assert len(list((tmp_path / "tasks" / "reports").glob("crm-briefing-*.md"))) == 1

@@ -130,6 +130,10 @@ def create_app(port: int = 8000) -> FastAPI:
     if static_path.exists():
         app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
+    # CRM REST API (local SQLite; primary purpose of this build)
+    from src.api.crm_routes import router as crm_router
+    app.include_router(crm_router)
+
     # Routes
     @app.get("/", response_class=HTMLResponse)
     async def root() -> HTMLResponse:
@@ -138,6 +142,14 @@ def create_app(port: int = 8000) -> FastAPI:
         if index_path.exists():
             return HTMLResponse(content=index_path.read_text())
         return HTMLResponse(content="<h1>Sovereign Agent</h1><p>Static files not found.</p>")
+
+    @app.get("/crm", response_class=HTMLResponse)
+    async def crm_page() -> HTMLResponse:
+        """Serve the CRM web interface."""
+        crm_path = Path(__file__).parent / "static" / "crm.html"
+        if crm_path.exists():
+            return HTMLResponse(content=crm_path.read_text())
+        return HTMLResponse(content="<h1>CRM</h1><p>Static files not found.</p>")
 
     @app.get("/health", response_model=HealthResponse)
     async def health_check() -> HealthResponse:

@@ -29,6 +29,8 @@ from src.agent import AgentV2, AgentConfigV2
 from src.agent.core_v2 import Message
 from src.core import assert_airgap, load_config
 from src.core.egress_guard import EgressViolation
+from src.crm import CRMDatabase, CRMRepository, CRMService
+from src.crm.backup import backup_database, export_csv
 from src.memory import KnowledgeBase, VectorStore
 from src.memory.conversation_store import ConversationStore
 from src.tools import build_registry
@@ -67,6 +69,8 @@ class AutonomousRunner:
         self._store = ConversationStore(
             storage_dir=config.working_dir / ".sovereign" / "conversations"
         )
+        self._crm_db = CRMDatabase(config.working_dir / ".sovereign" / "crm.db")
+        self._crm = CRMService(CRMRepository(self._crm_db))
         self.agent = self._build_agent(config.working_dir)
         self._load_or_resume()
 
@@ -74,7 +78,7 @@ class AutonomousRunner:
 
     def _init_dirs(self, working_dir: Path) -> dict[str, Path]:
         """Create the queue directories; return a name->path map."""
-        names = ["inbox", "active", "done", "failed", "state"]
+        names = ["inbox", "active", "done", "failed", "state", "reports"]
         dirs = {n: working_dir / "tasks" / n for n in names}
         for path in dirs.values():
             path.mkdir(parents=True, exist_ok=True)
@@ -273,11 +277,30 @@ class AutonomousRunner:
                 logger.exception(f"Loop error (continuing): {e}")
                 time.sleep(self.config.poll_interval)
         self.agent.close()
+        self._crm_db.close()
         logger.info("Autonomous runner stopped")
 
+    def _maybe_crm_report(self) -> None:
+        """Once per day, file a CRM briefing and back up the database."""
+        stamp = self._dirs["state"] / "crm_last_briefing.txt"
+        today = time.strftime("%Y-%m-%d")
+        if stamp.exists() and stamp.read_text(encoding="utf-8").strip() == today:
+            return
+        try:
+            briefing = self._crm.daily_briefing()
+            self._atomic_write(self._dirs["reports"] / f"crm-briefing-{today}.md", briefing)
+            backups = self.config.working_dir / ".sovereign" / "backups"
+            backup_database(self._crm_db.db_path, backups)
+            export_csv(self._crm.repo, backups)
+            self._atomic_write(stamp, today)
+            logger.info("CRM daily briefing + backup written")
+        except Exception as e:  # noqa: BLE001 - reporting must never break the loop
+            logger.error(f"CRM report failed (continuing): {e}")
+
     def _tick(self) -> None:
-        """One iteration: heartbeat, claim a task, run it, or idle."""
+        """One iteration: heartbeat, daily CRM report, claim a task, or idle."""
         self._write_heartbeat(current=None)
+        self._maybe_crm_report()
         if not self._disk_ok():
             time.sleep(self.config.poll_interval)
             return

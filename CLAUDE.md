@@ -44,6 +44,28 @@ client. Runs autonomously, persists across reboots, and never touches the intern
 Run the daemon: `python -m src.autonomous --working-dir <dir>`
 Tests: `pytest tests/test_airgap.py tests/test_egress_guard.py tests/test_autonomous.py tests/test_longevity.py`
 
+### CRM — Customer Relationship Management (Phase 72)
+The **primary purpose** of this deployment: a general-purpose, fully-offline CRM.
+
+- **Storage** — `src/crm/`: standard-library `sqlite3` (no new deps), DB at
+  `<workspace>/.sovereign/crm.db`, persists across reboots.
+- **Model** — Companies, Contacts, Deals (pipeline: lead→qualified→proposal→
+  negotiation→won/lost), Interactions, Tasks (follow-ups), Appointments, Payments.
+  `models.py` / `database.py` (schema) / `repository.py` (CRUD) / `service.py`
+  (pipeline analytics, due tasks, stale contacts, daily briefing).
+- **Conversational** — `src/tools/crm_tool.py` registers the `crm` tool so the agent
+  manages records in natural language (add_contact, log_interaction, add_deal,
+  pipeline, add_task, due_tasks, briefing, ...).
+- **Web UI** — `src/api/crm_routes.py` (REST) + `static/crm.html|crm.css|crm.js`,
+  served at `/crm` (Dashboard, Contacts, Pipeline board, Follow-ups). AI chat at `/`.
+- **Autonomous** — the daemon files a daily CRM briefing into `tasks/reports/` and
+  backs up the DB + CSV exports to `<workspace>/.sovereign/backups/` once per day.
+- **Backup/export** — `src/crm/backup.py`: timestamped DB snapshots + CSV export
+  (contacts/companies/deals). Trigger from the UI ("Backup now") or `POST /crm/backup`.
+  Important: air-gapped data lives only on this box — copy backups to a second drive.
+
+Tests: `pytest tests/test_crm.py tests/test_crm_api.py`
+
 ### Completed Phases
 - ✅ **Phase 1:** Project Hardening
 - ✅ **Phase 11:** Diff-Based File Editing
